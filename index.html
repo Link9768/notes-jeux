@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>Notes Jeux</title>
+<style>
+:root{--bg:#121214;--card:#1c1c20;--line:#2c2c32;--txt:#ececf1;--mut:#8b8b96;--acc:#4f8cff;--ej:#e3342f;--ph:#f08c00;--bgg:#1f6fb2;--okk:#ff8a00;--ok:#34c759}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--txt);font:14px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:1100px;margin:0 auto;padding:16px}
+form{display:flex;gap:8px;margin-bottom:16px}
+input{flex:1;min-width:0;padding:12px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--txt);font-size:16px}
+input:focus-visible,button:focus-visible,a:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+button{padding:12px 18px;border:0;border-radius:10px;background:var(--acc);color:#fff;font-weight:600;font-size:15px;cursor:pointer}
+a{color:var(--acc)}
+.layout{display:grid;grid-template-columns:1.35fr 1fr;gap:14px}
+.head{display:flex;gap:12px;align-items:center;margin-bottom:12px}
+.head img{width:64px;height:64px;object-fit:cover;border-radius:10px;background:var(--card)}
+.head h1{font-size:20px;margin:0}
+.mut{color:var(--mut);font-size:12px}
+.tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.tile{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px;min-width:0}
+.src{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--mut);display:flex;gap:6px;align-items:center}
+.dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
+.big{font-size:26px;font-weight:700;margin-top:4px}
+.big small{font-size:13px;color:var(--mut);font-weight:400}
+.match{font-size:11px;color:var(--mut);margin-top:6px;border-top:1px dashed var(--line);padding-top:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.na{color:var(--mut);font-style:italic;margin-top:6px}
+.kv{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+.kv div{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px;text-align:center}
+.kv b{font-size:17px}
+.okk{border:2px solid var(--okk);border-radius:12px;overflow:hidden;align-self:start}
+.okk header{background:var(--okk);color:#fff;padding:10px 12px}
+.okk header b{font-size:15px}
+.ann{display:grid;grid-template-columns:60px 1fr auto;gap:8px;padding:9px 12px;border-bottom:1px solid var(--line);align-items:center}
+.tag{font-size:10px;padding:1px 6px;border-radius:10px;background:var(--line);color:var(--mut);margin-left:4px}
+.tag.ok{background:#34c75933;color:var(--ok)}
+.okk footer{padding:10px;text-align:center}
+.okk footer a{color:var(--okk);font-weight:700}
+.skel{height:14px;border-radius:6px;margin:8px 0;background:linear-gradient(90deg,var(--line),#3a3a42,var(--line));background-size:200% 100%;animation:sk 1.2s infinite}
+@keyframes sk{to{background-position:-200% 0}}
+@media (prefers-reduced-motion:reduce){.skel{animation:none}}
+@media (max-width:760px){.layout{grid-template-columns:1fr}.tile{padding:8px}.big{font-size:20px}.head img{width:44px;height:44px}.ann{grid-template-columns:52px 1fr auto}}
+</style>
+</head>
+<body>
+<main>
+  <form id="f"><input id="q" aria-label="Nom du jeu" placeholder="Nom du jeu (ex. Clank)" autocomplete="off" enterkeyhint="search"><button>Rechercher</button></form>
+  <div id="out" aria-live="polite"></div>
+</main>
+<script>
+const API = 'https://n8n.srv1250642.hstgr.cloud/webhook/notes-jeux';
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+const fr = n => String(n).replace('.', ',');
+const ext = (url, txt) => `<a href="${esc(url)}" target="_blank" rel="noopener">${txt}</a>`;
+let seq = 0;
+
+function tile(name, color, d, scale, unit, searchUrl) {
+  const src = `<div class="src"><span class="dot" style="background:${color}"></span>${name}</div>`;
+  if (!d) return `<div class="tile">${src}<div class="na">indisponible</div><div class="match">${ext(searchUrl, 'chercher ↗')}</div></div>`;
+  const val = d.note == null
+    ? `<div class="na">pas encore d'avis</div>`
+    : `<div class="big">${fr(d.note)}<small>/${scale}</small></div><div class="mut">${d.avis ?? d.votes ?? '?'} ${unit}</div>`;
+  return `<div class="tile">${src}${val}<div class="match">« ${esc(d.titre)} » ${ext(d.url, '↗')}</div></div>`;
+}
+
+function okk(o, lien) {
+  if (!o) return `<section class="okk"><header><b>Okkazeo</b><div>indisponible</div></header><footer>${ext(lien, 'Chercher sur Okkazeo ↗')}</footer></section>`;
+  const rows = o.annonces.map(a => `<div class="ann"><b>${fr(a.prix)} €</b><span>${esc(a.etat)}${a.bonneAffaire ? '<span class="tag ok">bonne affaire</span>' : ''}${a.extensions ? '<span class="tag">+ ext.</span>' : ''}<br><span class="mut">${esc(a.ville ?? '')}</span></span><span class="mut">${a.date ? a.date.slice(8, 10) + '/' + a.date.slice(5, 7) : ''}</span></div>`).join('');
+  const prix = o.total && o.min != null ? ` · ${fr(o.min)}–${fr(o.max)} €` : '';
+  const pied = o.annonces.length ? 'Ouvrir sur Okkazeo ↗' : o.total ? `Voir les ${o.total} annonces France ↗` : 'Ouvrir sur Okkazeo ↗';
+  return `<section class="okk"><header><b>Okkazeo · ${o.annonces.length} près de Paris</b><div>${o.total} en France${prix}</div></header>${rows}<footer>${ext(o.url, pied)}</footer></section>`;
+}
+
+function render(d) {
+  const b = d.bgg, L = d.liens;
+  const head = b
+    ? `<div class="head">${b.image ? `<img src="${esc(b.image)}" alt="">` : ''}<div><h1>${esc(b.titre)}</h1><div class="mut">${[b.annee, b.joueurs && b.joueurs + ' joueurs', b.age].filter(Boolean).map(esc).join(' · ')}</div></div></div>`
+    : `<div class="head"><div><h1>${esc(d.query)}</h1></div></div>`;
+  const tiles = `<div class="tiles">${tile('Esprit Jeu', 'var(--ej)', d.espritjeu, 5, 'avis', L.espritjeu)}${tile('Philibert', 'var(--ph)', d.philibert, 5, 'avis', L.philibert)}${tile('BGG', 'var(--bgg)', b, 10, 'votes', L.bgg)}</div>`;
+  const kv = b ? `<div class="kv"><div><span class="mut">⏱ Durée</span><br><b>${esc(b.duree ?? '?')} min</b></div><div><span class="mut">⚖ Difficulté</span><br><b>${b.poids != null ? fr(b.poids) : '?'} / 5</b></div></div>` : '';
+  $('#out').innerHTML = `<div class="layout"><div>${head}${tiles}${kv}</div>${okk(d.okkazeo, L.okkazeo)}</div>`;
+}
+
+function skeleton() {
+  const t = n => `<div class="tile"><div class="src">${n}</div><div class="skel" style="width:50%;height:22px"></div><div class="skel" style="width:70%"></div></div>`;
+  return `<div class="layout"><div><div class="tiles">${t('Esprit Jeu')}${t('Philibert')}${t('BGG')}</div></div><section class="okk"><header><b>Okkazeo</b></header><div style="padding:12px"><div class="skel"></div><div class="skel"></div><div class="skel"></div></div></section></div>`;
+}
+
+async function search(q) {
+  const my = ++seq;
+  $('#out').innerHTML = skeleton();
+  try {
+    const r = await fetch(API + '?q=' + encodeURIComponent(q));
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const d = await r.json();
+    if (my === seq) render(d);
+  } catch (err) {
+    if (my === seq) $('#out').innerHTML = `<p class="na">Recherche impossible (${esc(err.message)}). Réessaie dans un instant.</p>`;
+  }
+}
+
+$('#f').addEventListener('submit', e => {
+  e.preventDefault();
+  const q = $('#q').value.trim();
+  if (!q) return;
+  history.replaceState(null, '', '?q=' + encodeURIComponent(q));
+  search(q);
+});
+
+const initial = new URLSearchParams(location.search).get('q');
+if (initial) { $('#q').value = initial; search(initial.trim()); }
+</script>
+</body>
+</html>
