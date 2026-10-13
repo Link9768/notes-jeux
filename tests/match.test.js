@@ -27,6 +27,27 @@ test('accessoires exclus', () => {
   assert.ok(!isAccessory('Clank! Catacombes'));
   assert.equal(pickProduct('clank', [{ title: 'Clank! - Pack de Stickers', url: 'x' }]), null);
 });
+test('titre quasi identique (une lettre d\'écart) : « catane » → Catan, pas « Princes de Catane »', () => {
+  const c = [{ title: 'Catan Duel (Princes de Catane)' }, { title: 'Catan Junior' }, { title: 'Catan' }];
+  assert.equal(pickProduct('catane', c).title, 'Catan');
+});
+test('faute de frappe d\'une lettre tolérée (≥ 5 lettres), pas sur les titres courts', () => {
+  assert.equal(pickProduct('clanck', clank).url, 'clank-fr');
+  assert.equal(pickProduct('azu', [{ title: 'Azul' }]), null);
+});
+test('sans titre exact : le jeu de base du site (1er résultat), pas l\'extension ni le plus court', () => {
+  const c = [
+    { title: 'Pays-Bas (Ext. Les Aventuriers du Rail)' },
+    { title: 'Les Aventuriers du Rail - USA (Éd. 2025)' },
+    { title: 'Les Aventuriers du Rail - Europe' },
+  ];
+  assert.equal(pickProduct('les aventuriers du rail', c).title, 'Les Aventuriers du Rail - USA (Éd. 2025)');
+});
+test('extension : acceptée quand elle est la seule à correspondre ou demandée', () => {
+  const c = [{ title: 'Pays-Bas (Ext. Les Aventuriers du Rail)' }, { title: 'Les Aventuriers du Rail - Europe' }];
+  assert.equal(pickProduct('pays bas', c).title, 'Pays-Bas (Ext. Les Aventuriers du Rail)');
+  assert.equal(pickProduct('ext aventuriers rail', c).title, 'Pays-Bas (Ext. Les Aventuriers du Rail)');
+});
 test('requête absurde → null', () => assert.equal(pickProduct('azertyuiop', clank), null));
 test('liste vide / requête vide → null', () => {
   assert.equal(pickProduct('clank', []), null);

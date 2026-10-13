@@ -28,6 +28,20 @@ test('Esprit Jeu : candidats et choix de Clank!', () => {
   assert.ok(c.every(x => x.title && /^https:\/\/www\.espritjeu\.com\//.test(x.url)));
   assert.equal(pickProduct('clank', c).url, 'https://www.espritjeu.com/jeux-de-strategie/clank-les-aventuriers-du-deckbuilding.html');
 });
+test('Esprit Jeu réel : « les aventuriers du rail » → édition USA (jeu de base), pas Europe ni l\'extension', () => {
+  const p = pickProduct('les aventuriers du rail', parseEspritJeuSearch(fx('espritjeu-search-rail.html')));
+  assert.equal(p.title, 'Les Aventuriers du Rail - USA (Éd. 2025)');
+});
+test('réel : « catane » → Catan chez Esprit Jeu et chez Philibert (VF)', () => {
+  assert.equal(pickProduct('catane', parseEspritJeuSearch(fx('espritjeu-search-catane.html'))).title, 'Catan');
+  const ph = pickProduct('catane', parsePhilibertSearch(fx('philibert-search-catane.html')));
+  assert.equal(ph.title, 'Catan');
+  assert.equal(ph.lang, 'fr');
+});
+test('Esprit Jeu réel : accents conservés une fois la page décodée en latin1', () => {
+  const p = pickProduct('château combo', parseEspritJeuSearch(fx('espritjeu-search-chateau-combo.html')));
+  assert.equal(p.title, 'Château Combo');
+});
 test('Okkazeo recherche : URL absolue /jeux/16977/', () => {
   const c = parseOkkazeoSearch(fx('okkazeo-search-clank.html'));
   assert.equal(pickProduct('clank', c).url, 'https://www.okkazeo.com/jeux/16977/clank');
