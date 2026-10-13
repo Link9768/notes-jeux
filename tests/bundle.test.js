@@ -78,9 +78,31 @@ test('sources : erreur non-Error (chaîne) → message lisible, pas « undefined
   const { out } = await run('sources', { nodes: sourcesNodes(), http: o => { if (o.url === PH_SEARCH) throw 'boom'; return serve()(o); } });
   assert.deepEqual(out.erreurs, ['philibert: boom']);
 });
-test('sources : jeu absent d’Okkazeo → total 0, aucune annonce, pas de crash', async () => {
-  const { out } = await run('sources', { nodes: sourcesNodes(), http: serve({ [OK_SEARCH]: { statusCode: 200, body: '<html><p>Aucun résultat</p></html>' } }) });
+test('sources : jeu absent d’Okkazeo (vraie page « Aucun jeu ne correspond ») → total 0, aucune annonce, pas de crash', async () => {
+  const { out } = await run('sources', { nodes: sourcesNodes(), http: serve({ [OK_SEARCH]: { statusCode: 200, body: fx('okkazeo-search-vide.html') } }) });
   assert.deepEqual([out.okkazeo.total, out.okkazeo.annonces], [0, []]);
+});
+test('sources : page Okkazeo inattendue (200 sans résultat ni « aucun jeu ») → indisponible, pas « 0 annonce »', async () => {
+  const { out } = await run('sources', { nodes: sourcesNodes(), http: serve({ [OK_SEARCH]: { statusCode: 200, body: '<html><title>Verification</title><p>Please wait</p></html>' } }) });
+  assert.equal(out.okkazeo, null);
+  assert.ok(out.erreurs.some(e => e.startsWith('okkazeo:')), JSON.stringify(out.erreurs));
+});
+test('sources : plusieurs éditions Okkazeo au même titre → annonces additionnées, édition vide ignorée, bouton vers la recherche', async () => {
+  const search = 'https://www.okkazeo.com/jeux/resultats?rech_nom=dixit%3A%20odyssey';
+  const routes = {
+    [search]: 'okkazeo-search-dixit-odyssey.html',
+    'https://www.okkazeo.com/jeux/85748/dixit-odyssey': 'okkazeo-dixit-85748.html',
+    'https://www.okkazeo.com/jeux/90287/dixit-odyssey': 'okkazeo-dixit-90287.html',
+  };
+  const { out, calls } = await run('sources', { nodes: sourcesNodes('dixit: odyssey'), http: serve({}, routes) });
+  const { extractJsonLd, findProduct, offersOf } = require('../lib/jsonld.js');
+  const attendu = ['okkazeo-dixit-85748.html', 'okkazeo-dixit-90287.html'].map(f => offersOf(findProduct(extractJsonLd(fx(f)))));
+  assert.equal(out.okkazeo.total, attendu[0].total + attendu[1].total);
+  assert.equal(out.okkazeo.min, Math.min(attendu[0].min, attendu[1].min));
+  assert.equal(out.okkazeo.max, Math.max(attendu[0].max, attendu[1].max));
+  assert.equal(out.okkazeo.url, search);
+  assert.ok(!calls.some(c => c.url.includes('/jeux/7028/')), 'l\'édition sans annonce n\'est pas demandée');
+  assert.ok(out.okkazeo.total > 0);
 });
 test('sources : requête vide → tout null, aucune requête HTTP', async () => {
   const { out, calls } = await run('sources', { nodes: sourcesNodes(''), http: serve() });

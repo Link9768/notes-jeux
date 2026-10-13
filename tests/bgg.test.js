@@ -39,6 +39,12 @@ test('durée fixe et champs absents → pas de crash', () => {
   assert.equal(b.poids, null);
   assert.equal(b.joueurs, null);
 });
+test('valeurs 0 de BGG (= inconnu pour un jeu récent) → null, jamais « 0/10 » ni « difficulté 0 »', () => {
+  const xml = '<items><item type="boardgame" id="3"><name type="primary" value="Récent"/><yearpublished value="0"/><minplayers value="0"/><maxplayers value="0"/><minplaytime value="0"/><maxplaytime value="0"/><minage value="0"/><statistics><ratings><usersrated value="0"/><average value="0"/><averageweight value="0"/></ratings></statistics></item></items>';
+  const b = pickBgg(parseBggThings(xml));
+  assert.deepEqual([b.note, b.poids, b.duree, b.joueurs, b.age, b.annee], [null, null, null, null, null, null]);
+  assert.equal(b.votes, 0);
+});
 test('entités XML décodées dans le titre', () => {
   const xml = '<items><item type="boardgame" id="2"><name type="primary" value="Dungeons &amp; Dragons"/></item></items>';
   assert.equal(pickBgg(parseBggThings(xml)).titre, 'Dungeons & Dragons');

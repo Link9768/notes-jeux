@@ -55,6 +55,12 @@ const API = 'https://n8n.srv1250642.hstgr.cloud/webhook/notes-jeux';
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const fr = n => String(n).replace('.', ',');
+// Année affichée quand ce n'est pas l'année en cours (sinon une annonce ancienne paraît récente).
+const fmtDate = iso => {
+  if (!iso) return '';
+  const [y, m, d] = iso.split('-');
+  return y === String(new Date().getFullYear()) ? `${d}/${m}` : `${d}/${m}/${y}`;
+};
 const ext = (url, txt) => `<a href="${esc(url)}" target="_blank" rel="noopener">${txt}</a>`;
 let seq = 0;
 
@@ -69,7 +75,7 @@ function tile(name, color, d, scale, unit, searchUrl) {
 
 function okk(o, lien) {
   if (!o) return `<section class="okk"><header><b>Okkazeo</b><div>indisponible</div></header><footer>${ext(lien, 'Chercher sur Okkazeo ↗')}</footer></section>`;
-  const rows = o.annonces.map(a => `<div class="ann"><b>${fr(a.prix)} €</b><span>${esc(a.etat)}${a.bonneAffaire ? '<span class="tag ok">bonne affaire</span>' : ''}${a.extensions ? '<span class="tag">+ ext.</span>' : ''}<br><span class="mut">${esc(a.ville ?? '')}</span></span><span class="mut">${a.date ? a.date.slice(8, 10) + '/' + a.date.slice(5, 7) : ''}</span></div>`).join('');
+  const rows = o.annonces.map(a => `<div class="ann"><b>${fr(a.prix)} €</b><span>${esc(a.etat)}${a.bonneAffaire ? '<span class="tag ok">bonne affaire</span>' : ''}${a.extensions ? '<span class="tag">+ ext.</span>' : ''}<br><span class="mut">${esc(a.ville ?? '')}</span></span><span class="mut">${fmtDate(a.date)}</span></div>`).join('');
   const prix = o.total && o.min != null ? ` · ${fr(o.min)}–${fr(o.max)} €` : '';
   const pied = o.annonces.length ? 'Ouvrir sur Okkazeo ↗' : o.total ? `Voir les ${o.total} annonces France ↗` : 'Ouvrir sur Okkazeo ↗';
   return `<section class="okk"><header><b>Okkazeo · ${o.annonces.length} près de Paris</b><div>${o.total} en France${prix}</div></header>${rows}<footer>${ext(o.url, pied)}</footer></section>`;

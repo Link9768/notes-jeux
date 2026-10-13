@@ -46,6 +46,13 @@ test('Okkazeo recherche : URL absolue /jeux/16977/', () => {
   const c = parseOkkazeoSearch(fx('okkazeo-search-clank.html'));
   assert.equal(pickProduct('clank', c).url, 'https://www.okkazeo.com/jeux/16977/clank');
 });
+test('Okkazeo recherche : plusieurs éditions au même titre, avec leur nombre d\'annonces (Dixit Odyssey)', () => {
+  const c = parseOkkazeoSearch(fx('okkazeo-search-dixit-odyssey.html'));
+  assert.deepEqual(c.map(x => [x.url.split('/')[4], x.annonces]), [['7028', 0], ['85748', 2], ['90287', 2]]);
+});
+test('Okkazeo recherche : Clank → 14 annonces', () => {
+  assert.equal(parseOkkazeoSearch(fx('okkazeo-search-clank.html'))[0].annonces, 14);
+});
 test('pages sans résultat → []', () => {
   assert.deepEqual(parsePhilibertSearch('<html></html>'), []);
   assert.deepEqual(parseEspritJeuSearch('<html></html>'), []);

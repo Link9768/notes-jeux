@@ -37,13 +37,28 @@ async function boutique(searchUrl, parseSearch, charset) {
   return { note: r ? r.note : (p.note ?? null), avis: r ? r.avis : null, titre: p.title, url: p.url };
 }
 
+// Okkazeo sépare un même jeu en plusieurs éditions (même titre, ids différents) : on additionne celles qui ont des annonces.
 async function okkazeo() {
-  const p = pickProduct(q, parseOkkazeoSearch(await get(liens.okkazeo, BROWSER)));
-  if (!p) return { total: 0, min: null, max: null, url: liens.okkazeo, annonces: [] };
-  const html = await get(p.url, BROWSER);
-  const off = offersOf(findProduct(extractJsonLd(html))) || { total: 0, min: null, max: null };
-  const toutes = parseAnnonces(htmlToLines(html));
-  return { ...off, url: p.url, parsees: toutes.length, annonces: filterParis(toutes, CP_PARIS) };
+  const search = await get(liens.okkazeo, BROWSER);
+  if (!/Nous avons trouvé|Aucun jeu ne correspond/.test(search)) throw new Error('page de recherche inattendue');
+  const cands = parseOkkazeoSearch(search);
+  const p = pickProduct(q, cands);
+  const vide = { total: 0, min: null, max: null, url: p ? p.url : liens.okkazeo, annonces: [] };
+  if (!p) return vide;
+  const editions = cands.filter(c => normalize(c.title) === normalize(p.title) && c.annonces !== 0).slice(0, 3);
+  if (!editions.length) return vide;
+  const pages = await Promise.all(editions.map(e => get(e.url, BROWSER)));
+  const offres = pages.map(h => offersOf(findProduct(extractJsonLd(h))) || { total: 0, min: null, max: null });
+  const prix = offres.flatMap(o => [o.min, o.max]).filter(x => x != null);
+  const toutes = pages.flatMap(h => parseAnnonces(htmlToLines(h)));
+  return {
+    total: offres.reduce((s, o) => s + o.total, 0),
+    min: prix.length ? Math.min(...prix) : null,
+    max: prix.length ? Math.max(...prix) : null,
+    url: editions.length > 1 ? liens.okkazeo : editions[0].url,
+    parsees: toutes.length,
+    annonces: filterParis(toutes, CP_PARIS),
+  };
 }
 
 const [ej, ph, ok] = await Promise.allSettled([
