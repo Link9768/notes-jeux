@@ -1,0 +1,217 @@
+{
+  "name": "Notes Jeux — API",
+  "nodes": [
+    {
+      "id": "b2222222-0000-4000-8000-000000000001",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "7c1e4a52-9d3b-4f6e-8a21-5b0c9e3d7f14",
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "notes-jeux",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "b2222222-0000-4000-8000-000000000002",
+      "name": "BGG Search",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        240,
+        0
+      ],
+      "continueOnFail": false,
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.geekdo.com/xmlapi2/search?query={{ encodeURIComponent($json.query.q || '') }}&type=boardgame,boardgameexpansion",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "text",
+              "outputPropertyName": "data"
+            }
+          },
+          "timeout": 10000
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "b2222222-0000-4000-8000-000000000003",
+      "name": "BGG Candidats",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        0
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "// ---- lib/match.js\n// Choix automatique du produit. Collé tel quel en tête des nodes Code n8n (voir scripts/bundle.mjs).\nconst ACCESSORY_RE = /sleeve|pochette|sticker|autocollant|\\bkit\\b|feuille de score|piste de suivi|figurine|\\bsacs?\\b|insert|organiseur|playmat|tapis de jeu|goodies/i;\n\n// Accents combinants (plage U+0300 a U+036F) : construits sans echappement unicode, que n8n transforme a l enregistrement.\nconst COMBINING_RE = new RegExp('[' + String.fromCharCode(0x300) + '-' + String.fromCharCode(0x36f) + ']', 'g');\n\nfunction normalize(s) {\n  return String(s || '')\n    .normalize('NFD').replace(COMBINING_RE, '')\n    .toLowerCase()\n    .replace(/\\((vf|vo|fr|en|version francaise|version anglaise)\\)/g, ' ')\n    .replace(/[^a-z0-9]+/g, ' ')\n    .trim();\n}\n\nfunction isAccessory(title) {\n  return ACCESSORY_RE.test(title || '');\n}\n\n// Vrai si a et b sont égaux à une insertion, suppression ou substitution près.\nfunction within1(a, b) {\n  if (a === b) return true;\n  if (Math.abs(a.length - b.length) > 1) return false;\n  let i = 0;\n  while (i < a.length && i < b.length && a[i] === b[i]) i++;\n  if (a.length === b.length) return a.slice(i + 1) === b.slice(i + 1);\n  return a.length > b.length ? a.slice(i + 1) === b.slice(i) : b.slice(i + 1) === a.slice(i);\n}\n\n// Ordre de préférence : titre exact → titre à une lettre près (« catane » → « Catan ») →\n// titres contenant tous les mots, jeu de base avant extension, dans l'ordre de pertinence du site.\nfunction pickProduct(query, candidates) {\n  const q = normalize(query);\n  const pool = (candidates || []).filter(c => c && c.title && !isAccessory(c.title));\n  if (!q || pool.length === 0) return null;\n  const frFirst = (a, b) => (a.lang === 'fr' ? 0 : 1) - (b.lang === 'fr' ? 0 : 1);\n  const exact = pool.filter(c => normalize(c.title) === q).sort(frFirst);\n  if (exact.length) return exact[0];\n  if (q.length >= 5) {\n    const near = pool.filter(c => within1(normalize(c.title), q)).sort(frFirst);\n    if (near.length) return near[0];\n  }\n  const words = q.split(' ');\n  const all = pool.filter(c => { const t = ` ${normalize(c.title)} `; return words.every(w => t.includes(` ${w} `)); });\n  const isExt = c => /\\bext(ension)?\\b/.test(normalize(c.title));\n  const base = /\\bext(ension)?\\b/.test(q) ? all : all.filter(c => !isExt(c));\n  return [...(base.length ? base : all)].sort(frFirst)[0] || null;\n}\n\nif (typeof module !== 'undefined' && module.exports) module.exports = { normalize, isAccessory, pickProduct };\n\n\n// ---- lib/bgg.js\n// BGG xmlapi2 (recherche + fiche). Dépend de normalize() (lib/match.js, chargé avant dans les nodes n8n).\nfunction bggDecode(s) { return String(s).replace(/&amp;/g, '&').replace(/&quot;/g, '\"').replace(/&#0?39;|&apos;/g, \"'\").replace(/&lt;/g, '<').replace(/&gt;/g, '>'); }\nfunction bggAttr(tag, name) { const m = String(tag).match(new RegExp(`\\\\b${name}=\"([^\"]*)\"`)); return m ? bggDecode(m[1]) : null; }\nfunction bggVal(body, tag) { const m = String(body).match(new RegExp(`<${tag}\\\\b[^>]*\\\\bvalue=\"([^\"]*)\"`)); return m ? m[1] : null; }\n\nfunction parseBggSearch(xml) {\n  return [...String(xml || '').matchAll(/<item\\b([^>]*)>([\\s\\S]*?)<\\/item>/g)].map(([, a, body]) => ({\n    id: bggAttr(a, 'id'), type: bggAttr(a, 'type'), name: bggAttr((body.match(/<name\\b[^>]*>/) || [''])[0], 'value'),\n  }));\n}\n\nfunction bggCandidates(query, items) {\n  const q = normalize(query);\n  if (!q) return [];\n  let hit = items.filter(i => normalize(i.name) === q);\n  if (!hit.length) {\n    const words = q.split(' ');\n    hit = items.filter(i => { const t = ` ${normalize(i.name)} `; return words.every(w => t.includes(` ${w} `)); });\n  }\n  return [...new Set(hit.map(i => i.id))].slice(0, 20);\n}\n\nfunction parseBggThings(xml) {\n  return [...String(xml || '').matchAll(/<item\\b([^>]*)>([\\s\\S]*?)<\\/item>/g)].map(([, a, b]) => {\n    const n = k => { const v = bggVal(b, k); return v == null || v === '' ? null : Number(v); };\n    const primary = (b.match(/<name\\b[^>]*type=\"primary\"[^>]*>/) || [''])[0];\n    return {\n      id: bggAttr(a, 'id'), type: bggAttr(a, 'type'), titre: bggAttr(primary, 'value'),\n      image: ((b.match(/<image>([^<]*)<\\/image>/) || [])[1] || '').trim() || null,\n      annee: n('yearpublished'), minp: n('minplayers'), maxp: n('maxplayers'),\n      mint: n('minplaytime'), maxt: n('maxplaytime'), age: n('minage'),\n      votes: n('usersrated'), average: n('average'), poids: n('averageweight'),\n    };\n  });\n}\n\nfunction bggRange(a, b) { return a == null ? null : (b == null || a === b ? String(a) : `${a}–${b}`); }\n\nfunction pickBgg(things) {\n  const t = [...(things || [])].sort((x, y) => (x.type === 'boardgame' ? 0 : 1) - (y.type === 'boardgame' ? 0 : 1) || (y.votes || 0) - (x.votes || 0))[0];\n  if (!t) return null;\n  const r1 = v => (v == null ? null : Math.round(v * 10) / 10);\n  return {\n    note: r1(t.average), votes: t.votes, duree: bggRange(t.mint, t.maxt),\n    poids: t.poids == null ? null : Math.round(t.poids * 100) / 100, titre: t.titre,\n    annee: t.annee, joueurs: bggRange(t.minp, t.maxp), age: t.age == null ? null : `${t.age}+`,\n    image: t.image, url: `https://boardgamegeek.com/boardgame/${t.id}`,\n  };\n}\n\nif (typeof module !== 'undefined' && module.exports) {\n  if (typeof normalize === 'undefined') global.normalize = require('./match.js').normalize;\n  module.exports = { parseBggSearch, bggCandidates, parseBggThings, pickBgg };\n}\n\n\n// ---- n8n/code/bgg-candidats.body.js\nconst xml = String($input.first().json.data ?? '');\nconst ids = bggCandidates($('Webhook').first().json.query.q, parseBggSearch(xml));\nreturn [{ json: { ids: ids.join(',') } }]; // toujours 1 item, même vide\n"
+      }
+    },
+    {
+      "id": "b2222222-0000-4000-8000-000000000004",
+      "name": "BGG Thing",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        720,
+        0
+      ],
+      "continueOnFail": false,
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.geekdo.com/xmlapi2/thing?id={{ $json.ids || '0' }}&stats=1",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "text",
+              "outputPropertyName": "data"
+            }
+          },
+          "timeout": 10000
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "b2222222-0000-4000-8000-000000000005",
+      "name": "BGG Fiche",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        960,
+        0
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "// ---- lib/match.js\n// Choix automatique du produit. Collé tel quel en tête des nodes Code n8n (voir scripts/bundle.mjs).\nconst ACCESSORY_RE = /sleeve|pochette|sticker|autocollant|\\bkit\\b|feuille de score|piste de suivi|figurine|\\bsacs?\\b|insert|organiseur|playmat|tapis de jeu|goodies/i;\n\n// Accents combinants (plage U+0300 a U+036F) : construits sans echappement unicode, que n8n transforme a l enregistrement.\nconst COMBINING_RE = new RegExp('[' + String.fromCharCode(0x300) + '-' + String.fromCharCode(0x36f) + ']', 'g');\n\nfunction normalize(s) {\n  return String(s || '')\n    .normalize('NFD').replace(COMBINING_RE, '')\n    .toLowerCase()\n    .replace(/\\((vf|vo|fr|en|version francaise|version anglaise)\\)/g, ' ')\n    .replace(/[^a-z0-9]+/g, ' ')\n    .trim();\n}\n\nfunction isAccessory(title) {\n  return ACCESSORY_RE.test(title || '');\n}\n\n// Vrai si a et b sont égaux à une insertion, suppression ou substitution près.\nfunction within1(a, b) {\n  if (a === b) return true;\n  if (Math.abs(a.length - b.length) > 1) return false;\n  let i = 0;\n  while (i < a.length && i < b.length && a[i] === b[i]) i++;\n  if (a.length === b.length) return a.slice(i + 1) === b.slice(i + 1);\n  return a.length > b.length ? a.slice(i + 1) === b.slice(i) : b.slice(i + 1) === a.slice(i);\n}\n\n// Ordre de préférence : titre exact → titre à une lettre près (« catane » → « Catan ») →\n// titres contenant tous les mots, jeu de base avant extension, dans l'ordre de pertinence du site.\nfunction pickProduct(query, candidates) {\n  const q = normalize(query);\n  const pool = (candidates || []).filter(c => c && c.title && !isAccessory(c.title));\n  if (!q || pool.length === 0) return null;\n  const frFirst = (a, b) => (a.lang === 'fr' ? 0 : 1) - (b.lang === 'fr' ? 0 : 1);\n  const exact = pool.filter(c => normalize(c.title) === q).sort(frFirst);\n  if (exact.length) return exact[0];\n  if (q.length >= 5) {\n    const near = pool.filter(c => within1(normalize(c.title), q)).sort(frFirst);\n    if (near.length) return near[0];\n  }\n  const words = q.split(' ');\n  const all = pool.filter(c => { const t = ` ${normalize(c.title)} `; return words.every(w => t.includes(` ${w} `)); });\n  const isExt = c => /\\bext(ension)?\\b/.test(normalize(c.title));\n  const base = /\\bext(ension)?\\b/.test(q) ? all : all.filter(c => !isExt(c));\n  return [...(base.length ? base : all)].sort(frFirst)[0] || null;\n}\n\nif (typeof module !== 'undefined' && module.exports) module.exports = { normalize, isAccessory, pickProduct };\n\n\n// ---- lib/bgg.js\n// BGG xmlapi2 (recherche + fiche). Dépend de normalize() (lib/match.js, chargé avant dans les nodes n8n).\nfunction bggDecode(s) { return String(s).replace(/&amp;/g, '&').replace(/&quot;/g, '\"').replace(/&#0?39;|&apos;/g, \"'\").replace(/&lt;/g, '<').replace(/&gt;/g, '>'); }\nfunction bggAttr(tag, name) { const m = String(tag).match(new RegExp(`\\\\b${name}=\"([^\"]*)\"`)); return m ? bggDecode(m[1]) : null; }\nfunction bggVal(body, tag) { const m = String(body).match(new RegExp(`<${tag}\\\\b[^>]*\\\\bvalue=\"([^\"]*)\"`)); return m ? m[1] : null; }\n\nfunction parseBggSearch(xml) {\n  return [...String(xml || '').matchAll(/<item\\b([^>]*)>([\\s\\S]*?)<\\/item>/g)].map(([, a, body]) => ({\n    id: bggAttr(a, 'id'), type: bggAttr(a, 'type'), name: bggAttr((body.match(/<name\\b[^>]*>/) || [''])[0], 'value'),\n  }));\n}\n\nfunction bggCandidates(query, items) {\n  const q = normalize(query);\n  if (!q) return [];\n  let hit = items.filter(i => normalize(i.name) === q);\n  if (!hit.length) {\n    const words = q.split(' ');\n    hit = items.filter(i => { const t = ` ${normalize(i.name)} `; return words.every(w => t.includes(` ${w} `)); });\n  }\n  return [...new Set(hit.map(i => i.id))].slice(0, 20);\n}\n\nfunction parseBggThings(xml) {\n  return [...String(xml || '').matchAll(/<item\\b([^>]*)>([\\s\\S]*?)<\\/item>/g)].map(([, a, b]) => {\n    const n = k => { const v = bggVal(b, k); return v == null || v === '' ? null : Number(v); };\n    const primary = (b.match(/<name\\b[^>]*type=\"primary\"[^>]*>/) || [''])[0];\n    return {\n      id: bggAttr(a, 'id'), type: bggAttr(a, 'type'), titre: bggAttr(primary, 'value'),\n      image: ((b.match(/<image>([^<]*)<\\/image>/) || [])[1] || '').trim() || null,\n      annee: n('yearpublished'), minp: n('minplayers'), maxp: n('maxplayers'),\n      mint: n('minplaytime'), maxt: n('maxplaytime'), age: n('minage'),\n      votes: n('usersrated'), average: n('average'), poids: n('averageweight'),\n    };\n  });\n}\n\nfunction bggRange(a, b) { return a == null ? null : (b == null || a === b ? String(a) : `${a}–${b}`); }\n\nfunction pickBgg(things) {\n  const t = [...(things || [])].sort((x, y) => (x.type === 'boardgame' ? 0 : 1) - (y.type === 'boardgame' ? 0 : 1) || (y.votes || 0) - (x.votes || 0))[0];\n  if (!t) return null;\n  const r1 = v => (v == null ? null : Math.round(v * 10) / 10);\n  return {\n    note: r1(t.average), votes: t.votes, duree: bggRange(t.mint, t.maxt),\n    poids: t.poids == null ? null : Math.round(t.poids * 100) / 100, titre: t.titre,\n    annee: t.annee, joueurs: bggRange(t.minp, t.maxp), age: t.age == null ? null : `${t.age}+`,\n    image: t.image, url: `https://boardgamegeek.com/boardgame/${t.id}`,\n  };\n}\n\nif (typeof module !== 'undefined' && module.exports) {\n  if (typeof normalize === 'undefined') global.normalize = require('./match.js').normalize;\n  module.exports = { parseBggSearch, bggCandidates, parseBggThings, pickBgg };\n}\n\n\n// ---- n8n/code/bgg-fiche.body.js\nconst ids = $('BGG Candidats').first().json.ids;\nconst bgg = ids ? pickBgg(parseBggThings(String($input.first().json.data ?? ''))) : null;\nreturn [{ json: { bgg } }];\n"
+      }
+    },
+    {
+      "id": "b2222222-0000-4000-8000-000000000006",
+      "name": "Sources",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1200,
+        0
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "// ---- lib/match.js\n// Choix automatique du produit. Collé tel quel en tête des nodes Code n8n (voir scripts/bundle.mjs).\nconst ACCESSORY_RE = /sleeve|pochette|sticker|autocollant|\\bkit\\b|feuille de score|piste de suivi|figurine|\\bsacs?\\b|insert|organiseur|playmat|tapis de jeu|goodies/i;\n\n// Accents combinants (plage U+0300 a U+036F) : construits sans echappement unicode, que n8n transforme a l enregistrement.\nconst COMBINING_RE = new RegExp('[' + String.fromCharCode(0x300) + '-' + String.fromCharCode(0x36f) + ']', 'g');\n\nfunction normalize(s) {\n  return String(s || '')\n    .normalize('NFD').replace(COMBINING_RE, '')\n    .toLowerCase()\n    .replace(/\\((vf|vo|fr|en|version francaise|version anglaise)\\)/g, ' ')\n    .replace(/[^a-z0-9]+/g, ' ')\n    .trim();\n}\n\nfunction isAccessory(title) {\n  return ACCESSORY_RE.test(title || '');\n}\n\n// Vrai si a et b sont égaux à une insertion, suppression ou substitution près.\nfunction within1(a, b) {\n  if (a === b) return true;\n  if (Math.abs(a.length - b.length) > 1) return false;\n  let i = 0;\n  while (i < a.length && i < b.length && a[i] === b[i]) i++;\n  if (a.length === b.length) return a.slice(i + 1) === b.slice(i + 1);\n  return a.length > b.length ? a.slice(i + 1) === b.slice(i) : b.slice(i + 1) === a.slice(i);\n}\n\n// Ordre de préférence : titre exact → titre à une lettre près (« catane » → « Catan ») →\n// titres contenant tous les mots, jeu de base avant extension, dans l'ordre de pertinence du site.\nfunction pickProduct(query, candidates) {\n  const q = normalize(query);\n  const pool = (candidates || []).filter(c => c && c.title && !isAccessory(c.title));\n  if (!q || pool.length === 0) return null;\n  const frFirst = (a, b) => (a.lang === 'fr' ? 0 : 1) - (b.lang === 'fr' ? 0 : 1);\n  const exact = pool.filter(c => normalize(c.title) === q).sort(frFirst);\n  if (exact.length) return exact[0];\n  if (q.length >= 5) {\n    const near = pool.filter(c => within1(normalize(c.title), q)).sort(frFirst);\n    if (near.length) return near[0];\n  }\n  const words = q.split(' ');\n  const all = pool.filter(c => { const t = ` ${normalize(c.title)} `; return words.every(w => t.includes(` ${w} `)); });\n  const isExt = c => /\\bext(ension)?\\b/.test(normalize(c.title));\n  const base = /\\bext(ension)?\\b/.test(q) ? all : all.filter(c => !isExt(c));\n  return [...(base.length ? base : all)].sort(frFirst)[0] || null;\n}\n\nif (typeof module !== 'undefined' && module.exports) module.exports = { normalize, isAccessory, pickProduct };\n\n\n// ---- lib/jsonld.js\nfunction extractJsonLd(html) {\n  const out = [];\n  const re = /<script[^>]*type=[\"']application\\/ld\\+json[\"'][^>]*>([\\s\\S]*?)<\\/script>/gi;\n  let m;\n  while ((m = re.exec(html || ''))) {\n    try {\n      const v = JSON.parse(m[1].trim());\n      for (const x of Array.isArray(v) ? v : (v['@graph'] || [v])) out.push(x);\n    } catch (e) { /* bloc invalide ignoré */ }\n  }\n  return out;\n}\n\nfunction findProduct(objs) {\n  return (objs || []).find(o => [].concat(o && o['@type']).includes('Product')) || null;\n}\n\nfunction ratingOf(product) {\n  const r = product && product.aggregateRating;\n  if (!r) return null;\n  const note = parseFloat(String(r.ratingValue).replace(',', '.'));\n  const avis = parseInt(r.reviewCount ?? r.ratingCount, 10);\n  return Number.isFinite(note) ? { note: Math.round(note * 10) / 10, avis: Number.isFinite(avis) ? avis : null } : null;\n}\n\nfunction offersOf(product) {\n  const o = product && product.offers;\n  if (!o) return null;\n  return { total: Number(o.offerCount ?? 0), min: o.lowPrice != null ? Number(o.lowPrice) : null, max: o.highPrice != null ? Number(o.highPrice) : null };\n}\n\nif (typeof module !== 'undefined' && module.exports) module.exports = { extractJsonLd, findProduct, ratingOf, offersOf };\n\n\n// ---- lib/okkazeo.js\nconst PRICE_RE = /^(\\d+)\\s*€\\s*(\\d{2})\\b/;\n\nfunction htmlToLines(html) {\n  return String(html || '')\n    .replace(/<(script|style)[\\s\\S]*?<\\/\\1>/gi, ' ')\n    .replace(/<br\\s*\\/?>/gi, '\\n')\n    .replace(/<\\/(div|p|li|h\\d|tr|section|article|header|footer)>/gi, '\\n')\n    .replace(/<[^>]+>/g, ' ')\n    .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&#0?39;|&rsquo;|&apos;/g, \"'\").replace(/&euro;/g, '€')\n    .split('\\n').map(s => s.replace(/\\s+/g, ' ').trim()).filter(Boolean);\n}\n\nfunction parseAnnonces(lines) {\n  const out = [];\n  for (let i = 0; i < lines.length; i++) {\n    const p = lines[i].match(PRICE_RE);\n    if (!p) continue;\n    let j = i + 1;\n    while (j < lines.length && j < i + 12 && !PRICE_RE.test(lines[j])) j++;\n    const win = lines.slice(i + 1, j);\n    const v = win.findIndex(l => /^Vendu par\\b/i.test(l));\n    if (v === -1) continue;\n    const loc = win.map(l => l.match(/^(.+?) \\((\\d{4,5})\\)$/)).find(Boolean); // 4 chiffres = annonces étrangères (ex. Belgique)\n    const d = win.map(l => l.match(/^(\\d{2})\\/(\\d{2})\\/(\\d{4})$/)).find(Boolean);\n    const head = lines[i - 1] || '';\n    const paren = (head.match(/\\(([^()]+)\\)\\s*$/) || [])[1];\n    const etat = /^Jeu neuf\\b/i.test(head) ? 'neuf' : paren ? paren.replace(/^état\\s+/i, '') : head;\n    out.push({\n      prix: Number(p[1]) + Number(p[2]) / 100,\n      etat: etat.trim(),\n      ville: loc ? loc[1].trim() : null,\n      cp: loc ? loc[2] : null,\n      date: d ? `${d[3]}-${d[2]}-${d[1]}` : null,\n      bonneAffaire: /bonne affaire/i.test(lines[i]) || win.slice(0, v).some(l => /bonne affaire/i.test(l)),\n      extensions: /extension/i.test(head),\n      envoi: win.some(l => /Envoi en France/i.test(l)),\n    });\n  }\n  return out;\n}\n\nfunction filterParis(annonces, cps) {\n  const set = new Set(cps);\n  return (annonces || []).filter(a => a.cp && set.has(a.cp)).sort((a, b) => a.prix - b.prix);\n}\n\nif (typeof module !== 'undefined' && module.exports) module.exports = { htmlToLines, parseAnnonces, filterParis };\n\n\n// ---- lib/sites.js\n// Parseurs des pages de recherche (structure observée le 2026-10-13, voir docs/sources.md).\n// Pas de `URL` dans le bac à sable des nodes Code n8n (vérifié le 2026-10-13) : résolution à la main.\nfunction absUrl(base, href) {\n  const h = String(href || '').trim();\n  if (!h) return null;\n  if (/^https?:\\/\\//i.test(h)) return h;\n  if (h.startsWith('//')) return 'https:' + h;\n  const origin = (String(base).match(/^https?:\\/\\/[^/]+/i) || [])[0];\n  if (!origin) return null;\n  return origin + (h.startsWith('/') ? h : '/' + h);\n}\n\nfunction clean(s) {\n  return String(s || '')\n    .replace(/<[^>]+>/g, ' ')\n    .replace(/&amp;/g, '&').replace(/&quot;/g, '\"').replace(/&#0?39;|&#x27;|&apos;/g, \"'\").replace(/&nbsp;/g, ' ')\n    .replace(/\\s+/g, ' ').trim();\n}\n\n// Philibert : une carte = <div class=\"product-card … \" data-pid=\"…\">, titre dans a.product-card__title,\n// langue dans span.product-card__feature, note « x/5 » avant le titre si le produit a des avis.\nfunction parsePhilibertSearch(html) {\n  const out = [];\n  for (const card of String(html || '').split(/(?=<div\\s+class=\"product-card\\s[^\"]*\"\\s+data-pid=)/).slice(1)) {\n    const a = card.match(/<a class=\"h6 mb-0 product-card__title[^\"]*\" href=\"([^\"]+)\">([^<]+)<\\/a>/);\n    if (!a) continue;\n    const features = [...card.matchAll(/<span class=\"product-card__feature\">([^<]*)<\\/span>/g)].map(m => clean(m[1]));\n    const lang = features.includes('Français') ? 'fr' : features.includes('Anglais') ? 'en' : undefined;\n    const n = clean(card.slice(0, a.index)).match(/(\\d(?:[.,]\\d)?)\\/5/);\n    out.push({\n      title: clean(a[2]),\n      url: absUrl('https://www.philibertnet.com/', a[1]),\n      lang,\n      note: n ? parseFloat(n[1].replace(',', '.')) : null,\n    });\n  }\n  return out;\n}\n\n// Esprit Jeu : <h3 class=\"bp_designation\"><a href=\"…\"> Titre </a></h3>\nfunction parseEspritJeuSearch(html) {\n  return [...String(html || '').matchAll(/<h3 class=\"bp_designation\">\\s*<a href=\"([^\"]+)\">\\s*([^<]*?)\\s*<\\/a>/g)]\n    .map(m => ({ title: clean(m[2]), url: absUrl('https://www.espritjeu.com/', m[1]) }))\n    .filter(c => c.title && c.url);\n}\n\n// Okkazeo : <h4 class=\"titre\"><a href=\"/jeux/<id>/<slug>\" …>Titre</a></h4>\nfunction parseOkkazeoSearch(html) {\n  return [...String(html || '').matchAll(/<h4 class=\"titre\"><a href=\"(\\/jeux\\/\\d+\\/[^\"]*)\"[^>]*>([^<]*)<\\/a>/g)]\n    .map(m => ({ title: clean(m[2]), url: absUrl('https://www.okkazeo.com/', m[1]) }))\n    .filter(c => c.title && c.url);\n}\n\nif (typeof module !== 'undefined' && module.exports) module.exports = { parsePhilibertSearch, parseEspritJeuSearch, parseOkkazeoSearch };\n\n\nconst CP_PARIS = [\"75001\",\"75002\",\"75003\",\"75004\",\"75005\",\"75006\",\"75007\",\"75008\",\"75009\",\"75010\",\"75011\",\"75012\",\"75013\",\"75014\",\"75015\",\"75016\",\"75017\",\"75018\",\"75019\",\"75020\",\"75116\",\"92100\",\"92110\",\"92120\",\"92130\",\"92140\",\"92160\",\"92170\",\"92200\",\"92220\",\"92240\",\"92260\",\"92290\",\"92300\",\"92320\",\"92330\",\"92340\",\"92350\",\"93100\",\"93130\",\"93170\",\"93230\",\"93260\",\"93300\",\"93310\",\"93400\",\"93500\",\"94000\",\"94100\",\"94110\",\"94120\",\"94130\",\"94140\",\"94150\",\"94160\",\"94200\",\"94210\",\"94220\",\"94230\",\"94240\",\"94250\",\"94260\",\"94270\",\"94300\",\"94310\",\"94320\",\"94340\",\"94400\",\"94410\",\"94550\",\"94600\",\"94700\",\"94800\"];\n\n// ---- n8n/code/sources.body.js\nconst q = String($('Webhook').first().json.query.q || '').trim().slice(0, 100);\nconst enc = encodeURIComponent(q);\nconst liens = {\n  espritjeu: 'https://www.espritjeu.com/dhtml/resultat_recherche.php?keywords=' + enc,\n  philibert: 'https://www.philibertnet.com/fr/recherche?search_query=' + enc,\n  bgg: 'https://boardgamegeek.com/geeksearch.php?action=search&objecttype=boardgame&q=' + enc,\n  okkazeo: 'https://www.okkazeo.com/jeux/resultats?rech_nom=' + enc,\n};\nconst bgg = $('BGG Fiche').first().json.bgg;\nif (!q) return [{ json: { query: q, espritjeu: null, philibert: null, bgg: null, okkazeo: null, liens, erreurs: ['q manquant'] } }];\n\nconst UA = {\n  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36',\n  'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',\n  'Accept-Language': 'fr-FR,fr;q=0.9',\n};\n// Okkazeo refuse (403) le User-Agent seul : il faut les en-têtes d'un vrai navigateur (vérifié le 2026-10-13).\nconst BROWSER = {\n  ...UA,\n  'Sec-Fetch-Dest': 'document', 'Sec-Fetch-Mode': 'navigate', 'Sec-Fetch-Site': 'none', 'Sec-Fetch-User': '?1',\n  'Upgrade-Insecure-Requests': '1',\n  'sec-ch-ua': '\"Chromium\";v=\"130\", \"Google Chrome\";v=\"130\", \"Not?A_Brand\";v=\"99\"',\n  'sec-ch-ua-mobile': '?0', 'sec-ch-ua-platform': '\"Windows\"',\n  'Accept-Encoding': 'gzip, deflate, br', 'Referer': 'https://www.google.com/',\n};\n// charset : Esprit Jeu sert ses pages en ISO-8859-1 (accents perdus si lues en UTF-8) → arraybuffer + décodage.\nconst get = async (url, headers = UA, charset) => {\n  const r = await this.helpers.httpRequest({ url, headers, json: false, timeout: 10000, returnFullResponse: true, ignoreHttpStatusErrors: true, ...(charset ? { encoding: 'arraybuffer' } : {}) });\n  if (r.statusCode >= 400) throw new Error(`HTTP ${r.statusCode} ${url}`);\n  return charset ? Buffer.from(r.body).toString(charset) : String(r.body ?? '');\n};\n\nasync function boutique(searchUrl, parseSearch, charset) {\n  const p = pickProduct(q, parseSearch(await get(searchUrl, UA, charset)));\n  if (!p) return null;\n  const r = ratingOf(findProduct(extractJsonLd(await get(p.url, UA, charset))));\n  return { note: r ? r.note : (p.note ?? null), avis: r ? r.avis : null, titre: p.title, url: p.url };\n}\n\nasync function okkazeo() {\n  const p = pickProduct(q, parseOkkazeoSearch(await get(liens.okkazeo, BROWSER)));\n  if (!p) return { total: 0, min: null, max: null, url: liens.okkazeo, annonces: [] };\n  const html = await get(p.url, BROWSER);\n  const off = offersOf(findProduct(extractJsonLd(html))) || { total: 0, min: null, max: null };\n  const toutes = parseAnnonces(htmlToLines(html));\n  return { ...off, url: p.url, parsees: toutes.length, annonces: filterParis(toutes, CP_PARIS) };\n}\n\nconst [ej, ph, ok] = await Promise.allSettled([\n  boutique(liens.espritjeu, parseEspritJeuSearch, 'latin1'),\n  boutique(liens.philibert, parsePhilibertSearch),\n  okkazeo(),\n]);\nconst val = r => (r.status === 'fulfilled' ? r.value : null);\nconst erreurs = [ej, ph, ok].map((r, i) => r.status === 'rejected' ? `${['espritjeu', 'philibert', 'okkazeo'][i]}: ${(r.reason && r.reason.message) || String(r.reason)}` : null).filter(Boolean);\nreturn [{ json: { query: q, espritjeu: val(ej), philibert: val(ph), bgg, okkazeo: val(ok), liens, erreurs } }];\n"
+      }
+    },
+    {
+      "id": "b2222222-0000-4000-8000-000000000007",
+      "name": "Respond JSON",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1440,
+        0
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              }
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "BGG Search",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "BGG Search": {
+      "main": [
+        [
+          {
+            "node": "BGG Candidats",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "BGG Candidats": {
+      "main": [
+        [
+          {
+            "node": "BGG Thing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "BGG Thing": {
+      "main": [
+        [
+          {
+            "node": "BGG Fiche",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "BGG Fiche": {
+      "main": [
+        [
+          {
+            "node": "Sources",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sources": {
+      "main": [
+        [
+          {
+            "node": "Respond JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  }
+}
