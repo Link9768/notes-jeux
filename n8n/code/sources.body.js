@@ -5,9 +5,10 @@ const liens = {
   philibert: 'https://www.philibertnet.com/fr/recherche?search_query=' + enc,
   bgg: 'https://boardgamegeek.com/geeksearch.php?action=search&objecttype=boardgame&q=' + enc,
   okkazeo: 'https://www.okkazeo.com/jeux/resultats?rech_nom=' + enc,
+  myludo: 'https://www.myludo.fr/#!/search/' + enc,
 };
 const bgg = $('BGG Fiche').first().json.bgg;
-if (!q) return [{ json: { query: q, espritjeu: null, philibert: null, bgg: null, okkazeo: null, liens, erreurs: ['q manquant'] } }];
+if (!q) return [{ json: { query: q, espritjeu: null, philibert: null, bgg: null, okkazeo: null, myludo: null, liens, erreurs: ['q manquant'] } }];
 
 const UA = {
   'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36',
@@ -61,11 +62,31 @@ async function okkazeo() {
   };
 }
 
-const [ej, ph, ok] = await Promise.allSettled([
+// MyLudo (note de la communauté) : l'API interne exige le jeton CSRF de la page d'accueil ET le cookie de session.
+const getFull = async (url, headers) => this.helpers.httpRequest({ url, headers, json: false, timeout: 10000, returnFullResponse: true, ignoreHttpStatusErrors: true });
+async function myludo() {
+  const home = await getFull('https://www.myludo.fr/', UA);
+  if (home.statusCode >= 400) throw new Error(`HTTP ${home.statusCode} myludo.fr`);
+  const token = (String(home.body).match(/name="csrf-token" content="([^"]+)"/) || [])[1];
+  if (!token) throw new Error('jeton CSRF introuvable');
+  const cookie = [].concat((home.headers || {})['set-cookie'] || []).map(c => c.split(';')[0]).join('; ');
+  const api = { ...UA, 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-Csrf-Token': token, 'Cookie': cookie };
+  const call = async path => {
+    const r = await getFull('https://www.myludo.fr/views/' + path, api);
+    if (r.statusCode >= 400) throw new Error(`HTTP ${r.statusCode} myludo ${path.split('?')[0]}`);
+    return typeof r.body === 'string' ? JSON.parse(r.body) : r.body;
+  };
+  const p = pickMyludo(q, parseMyludoSearch(await call('search/datas.php?type=search&tab=games&page=1&order=bymagic&words=' + enc)));
+  if (!p) return null;
+  return parseMyludoGame(await call('game/datas.php?type=game&id=' + encodeURIComponent(p.id)));
+}
+
+const [ej, ph, ok, ml] = await Promise.allSettled([
   boutique(liens.espritjeu, parseEspritJeuSearch, 'latin1'),
   boutique(liens.philibert, parsePhilibertSearch),
   okkazeo(),
+  myludo(),
 ]);
 const val = r => (r.status === 'fulfilled' ? r.value : null);
-const erreurs = [ej, ph, ok].map((r, i) => r.status === 'rejected' ? `${['espritjeu', 'philibert', 'okkazeo'][i]}: ${(r.reason && r.reason.message) || String(r.reason)}` : null).filter(Boolean);
-return [{ json: { query: q, espritjeu: val(ej), philibert: val(ph), bgg, okkazeo: val(ok), liens, erreurs } }];
+const erreurs = [ej, ph, ok, ml].map((r, i) => r.status === 'rejected' ? `${['espritjeu', 'philibert', 'okkazeo', 'myludo'][i]}: ${(r.reason && r.reason.message) || String(r.reason)}` : null).filter(Boolean);
+return [{ json: { query: q, espritjeu: val(ej), philibert: val(ph), bgg, okkazeo: val(ok), myludo: val(ml), liens, erreurs } }];

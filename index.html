@@ -6,7 +6,7 @@
 <meta name="color-scheme" content="dark">
 <title>Notes Jeux</title>
 <style>
-:root{--bg:#121214;--card:#1c1c20;--line:#2c2c32;--txt:#ececf1;--mut:#8b8b96;--acc:#4f8cff;--ej:#e3342f;--ph:#f08c00;--bgg:#1f6fb2;--okk:#ff8a00;--ok:#34c759}
+:root{--bg:#121214;--card:#1c1c20;--line:#2c2c32;--txt:#ececf1;--mut:#8b8b96;--acc:#4f8cff;--ej:#e3342f;--ph:#f08c00;--bgg:#1f6fb2;--ml:#9b59d0;--okk:#ff8a00;--ok:#34c759}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--txt);font:14px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
 main{max-width:1100px;margin:0 auto;padding:16px}
@@ -20,7 +20,7 @@ a{color:var(--acc)}
 .head img{width:64px;height:64px;object-fit:cover;border-radius:10px;background:var(--card)}
 .head h1{font-size:20px;margin:0}
 .mut{color:var(--mut);font-size:12px}
-.tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
 .tile{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px;min-width:0}
 .src{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--mut);display:flex;gap:6px;align-items:center}
 .dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
@@ -42,7 +42,7 @@ a{color:var(--acc)}
 .skel{height:14px;border-radius:6px;margin:8px 0;background:linear-gradient(90deg,var(--line),#3a3a42,var(--line));background-size:200% 100%;animation:sk 1.2s infinite}
 @keyframes sk{to{background-position:-200% 0}}
 @media (prefers-reduced-motion:reduce){.skel{animation:none}}
-@media (max-width:760px){.layout{grid-template-columns:1fr}.tile{padding:8px}.big{font-size:20px}.head img{width:44px;height:44px}.ann{grid-template-columns:52px 1fr auto}}
+@media (max-width:760px){.layout{grid-template-columns:1fr}.tiles{grid-template-columns:repeat(2,1fr)}.tile{padding:8px}.big{font-size:20px}.head img{width:44px;height:44px}.ann{grid-template-columns:52px 1fr auto}}
 </style>
 </head>
 <body>
@@ -86,14 +86,14 @@ function render(d) {
   const head = b
     ? `<div class="head">${b.image ? `<img src="${esc(b.image)}" alt="">` : ''}<div><h1>${esc(b.titre)}</h1><div class="mut">${[b.annee, b.joueurs && b.joueurs + ' joueurs', b.age].filter(Boolean).map(esc).join(' · ')}</div></div></div>`
     : `<div class="head"><div><h1>${esc(d.query)}</h1></div></div>`;
-  const tiles = `<div class="tiles">${tile('Esprit Jeu', 'var(--ej)', d.espritjeu, 5, 'avis', L.espritjeu)}${tile('Philibert', 'var(--ph)', d.philibert, 5, 'avis', L.philibert)}${tile('BGG', 'var(--bgg)', b, 10, 'votes', L.bgg)}</div>`;
+  const tiles = `<div class="tiles">${tile('Esprit Jeu', 'var(--ej)', d.espritjeu, 5, 'avis', L.espritjeu)}${tile('Philibert', 'var(--ph)', d.philibert, 5, 'avis', L.philibert)}${tile('MyLudo', 'var(--ml)', d.myludo, 10, 'notes', L.myludo || '#')}${tile('BGG', 'var(--bgg)', b, 10, 'votes', L.bgg)}</div>`;
   const kv = b ? `<div class="kv"><div><span class="mut">⏱ Durée</span><br><b>${esc(b.duree ?? '?')} min</b></div><div><span class="mut">⚖ Difficulté</span><br><b>${b.poids != null ? fr(b.poids) : '?'} / 5</b></div></div>` : '';
   $('#out').innerHTML = `<div class="layout"><div>${head}${tiles}${kv}</div>${okk(d.okkazeo, L.okkazeo)}</div>`;
 }
 
 function skeleton() {
   const t = n => `<div class="tile"><div class="src">${n}</div><div class="skel" style="width:50%;height:22px"></div><div class="skel" style="width:70%"></div></div>`;
-  return `<div class="layout"><div><div class="tiles">${t('Esprit Jeu')}${t('Philibert')}${t('BGG')}</div></div><section class="okk"><header><b>Okkazeo</b></header><div style="padding:12px"><div class="skel"></div><div class="skel"></div><div class="skel"></div></div></section></div>`;
+  return `<div class="layout"><div><div class="tiles">${t('Esprit Jeu')}${t('Philibert')}${t('MyLudo')}${t('BGG')}</div></div><section class="okk"><header><b>Okkazeo</b></header><div style="padding:12px"><div class="skel"></div><div class="skel"></div><div class="skel"></div></div></section></div>`;
 }
 
 async function search(q) {

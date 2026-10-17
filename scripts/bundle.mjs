@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 const LIBS = {
   'bgg-candidats': ['lib/match.js', 'lib/bgg.js'],
   'bgg-fiche': ['lib/match.js', 'lib/bgg.js'],
-  sources: ['lib/match.js', 'lib/jsonld.js', 'lib/okkazeo.js', 'lib/sites.js'],
+  sources: ['lib/match.js', 'lib/jsonld.js', 'lib/okkazeo.js', 'lib/sites.js', 'lib/myludo.js'],
 };
 const name = process.argv[2];
 if (!LIBS[name]) { console.error('Nodes : ' + Object.keys(LIBS).join(', ')); process.exit(1); }

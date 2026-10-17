@@ -6,5 +6,5 @@ for (const q of process.argv.slice(2)) {
   const r = await fetch(`${API}?q=${encodeURIComponent(q)}`);
   const d = await r.json();
   const o = d.okkazeo;
-  console.log(`${q.padEnd(24)} ${r.status} ${((Date.now() - t) / 1000).toFixed(1)}s | EJ ${b(d.espritjeu)} | PH ${b(d.philibert)} | BGG ${b(d.bgg)} | OKK ${o ? `${o.total} (${o.min}-${o.max}€) parsees=${o.parsees ?? '-'} paris=${o.annonces.length}` : 'null'} | err ${JSON.stringify(d.erreurs)}`);
+  console.log(`${q.padEnd(24)} ${r.status} ${((Date.now() - t) / 1000).toFixed(1)}s | EJ ${b(d.espritjeu)} | PH ${b(d.philibert)} | ML ${b(d.myludo)} | BGG ${b(d.bgg)} | OKK ${o ? `${o.total} (${o.min}-${o.max}€) parsees=${o.parsees ?? '-'} paris=${o.annonces.length}` : 'null'} | err ${JSON.stringify(d.erreurs)}`);
 }

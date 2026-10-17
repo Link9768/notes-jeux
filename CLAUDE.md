@@ -58,3 +58,7 @@ Repli sans token (non officiel, non testé en production) : `api.geekdo.com/api/
 ## Sécurité
 
 Le webhook est public et déclenche environ 8 requêtes vers des sites tiers par appel (2 par boutique + 2 BGG) : acceptable pour un usage perso. Si besoin, ajouter une clé simple dans l'URL et la vérifier dans un node du workflow.
+
+## MyLudo (note de la communauté, sur 10)
+
+Tuile « MyLudo » : `rating.game.note` de l'API interne de MyLudo (non officielle). Elle exige le jeton CSRF de la page d'accueil et le cookie de session (3 requêtes : accueil, recherche, fiche) ; détail dans `docs/sources.md`. Jeu de base préféré aux extensions. Si l'API change, la tuile passe en « indisponible » sans casser le reste.

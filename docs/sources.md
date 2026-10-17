@@ -26,3 +26,10 @@
 
 ## Fixtures (`tests/fixtures/`)
 `philibert-search-clank.html`, `philibert-product-clank.html` (Clank! VF, sans avis), `philibert-product-catacombes.html` (avec avis), `espritjeu-search-clank.html`, `espritjeu-product-clank.html`, `okkazeo-clank.html`, `okkazeo-search-clank.html`. Pseudos vendeurs et IP serveur anonymisés. Fixtures BGG XML : à capturer une fois le token disponible.
+
+## MyLudo — note de la communauté, OK depuis n8n (vérifié le 2026-10-17)
+- Application JavaScript (page d'accueil de 1,6 Ko) : pas de HTML à lire. API interne, **jeton CSRF + cookie obligatoires** (sinon `{"success":false,"message":"Illegal action"}`) : `GET https://www.myludo.fr/` → jeton dans `<meta name="csrf-token">` + cookie `MYLUDO_SESSID`, renvoyés en `X-Csrf-Token` et `Cookie`.
+- Recherche : `GET /views/search/datas.php?type=search&tab=games&page=1&order=bymagic&words=<nom>` → `list[]` (`id`, `code`, `title`, `type` = `basegame` | `extension` | `goodie`).
+- Fiche : `GET /views/game/datas.php?type=game&id=<id>` → `rating.game` : `note` (« 8,3 », sur 10), `audience` (nombre de notes), `average`, `weighted`. Lien public : `https://www.myludo.fr/#!/game/<code>-<id>`.
+- Clank! (19410) : 8,3 / 1 500 notes ; 7 Wonders Duel : 8,5 / 4 150 ; Drillers : fiche sans note.
+- API non documentée : peut changer sans préavis.

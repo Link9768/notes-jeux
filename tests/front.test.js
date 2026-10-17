@@ -29,6 +29,10 @@ test('note absente → « pas encore d\'avis », source nulle → « indisponibl
   assert.ok(front.tile('Philibert', 'red', { note: null, titre: 'Clank!', url: 'u' }, 5, 'avis', 's').includes('pas encore d\'avis'));
   assert.ok(front.tile('BGG', 'blue', null, 10, 'votes', 's').includes('indisponible'));
 });
+test('tuile MyLudo : note sur 10 et nombre de notes', () => {
+  const h = front.tile('MyLudo', 'purple', { note: 8.3, avis: 1500, titre: 'Clank!', url: 'u' }, 10, 'notes', 's');
+  assert.ok(h.includes('8,3') && h.includes('/10') && h.includes('1500 notes') && h.includes('MyLudo'));
+});
 test('texte venant des sites échappé (pas d\'injection HTML)', () => {
   const h = front.okk(okkazeo([annonce(`${year}-01-02`, { ville: '<img src=x onerror=alert(1)>' })]), '#');
   assert.ok(!h.includes('<img src=x'));

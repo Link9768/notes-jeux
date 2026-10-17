@@ -1,3 +1,4 @@
 
 # Pages de sites tiers enregistrées pour les tests : jamais publiées (contenu des sites)
 tests/fixtures/*.html
+tests/fixtures/*.json

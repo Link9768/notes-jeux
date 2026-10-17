@@ -29,8 +29,18 @@ function run(name, { nodes, input = {}, http }) {
   return new AsyncFunction('$', '$input', 'URL', 'URLSearchParams', bundle(name))
     .call(ctx, $, $input, undefined, undefined).then(r => ({ out: r[0].json, calls }));
 }
+// MyLudo : l'API exige le jeton CSRF de la page d'accueil ET le cookie de session (sinon « Illegal action »).
+const MYL = 'https://www.myludo.fr';
+const myludoResp = o => {
+  if (o.url === MYL + '/') return { statusCode: 200, headers: { 'set-cookie': ['MYLUDO_SESSID=abc123; path=/; HttpOnly'] }, body: '<meta name="csrf-token" content="TOK123">' };
+  const ok = o.headers['X-Csrf-Token'] === 'TOK123' && /MYLUDO_SESSID=abc123/.test(o.headers.Cookie || '');
+  if (!ok) return { statusCode: 401, body: '{"success":false,"message":"Illegal action"}' };
+  if (o.url.includes('/search/')) return { statusCode: 200, body: fs.readFileSync(`${__dirname}/fixtures/myludo-search-clank.json`, 'utf8') };
+  return { statusCode: 200, body: JSON.parse(fs.readFileSync(`${__dirname}/fixtures/myludo-game-clank.json`, 'utf8')) }; // objet déjà parsé : n8n le fait selon le content-type
+};
 const serve = (overrides = {}, routes = ROUTES) => o => {
   if (o.url in overrides) return overrides[o.url];
+  if (o.url.startsWith(MYL)) return myludoResp(o);
   if (o.url in routes) {
     const text = fx(routes[o.url]);
     // Esprit Jeu sert ses pages en ISO-8859-1 : n8n ne les lit correctement qu'en arraybuffer + décodage latin1.
@@ -52,6 +62,24 @@ test('sources : les 3 boutiques + annonces Okkazeo filtrées à ≤ 10 km, trié
   assert.equal(out.bgg.note, 7.7);
   assert.deepEqual(out.erreurs, []);
   assert.ok(out.liens.okkazeo.includes('rech_nom=clank') && out.liens.espritjeu.includes('keywords=clank'));
+});
+const myludoHttp = (extra = {}) => o => (o.url in extra ? extra[o.url] : serve()(o));
+test('sources : note de la communauté MyLudo (jeton CSRF + cookie transmis)', async () => {
+  const { out, calls } = await run('sources', { nodes: sourcesNodes(), http: myludoHttp() });
+  assert.deepEqual(out.myludo, { note: 8.3, avis: 1500, titre: 'Clank!', url: 'https://www.myludo.fr/#!/game/clank-19410' });
+  assert.ok(out.liens.myludo.includes('myludo.fr') && out.liens.myludo.includes('clank'));
+  assert.ok(calls.filter(c => c.url.includes('/views/')).every(c => c.headers['X-Requested-With'] === 'XMLHttpRequest'));
+});
+test('sources : MyLudo en panne → null + erreur, le reste est servi', async () => {
+  const { out } = await run('sources', { nodes: sourcesNodes(), http: myludoHttp({ [MYL + '/']: { statusCode: 403, body: '' } }) });
+  assert.equal(out.myludo, null);
+  assert.ok(out.erreurs.some(e => e.startsWith('myludo:')), JSON.stringify(out.erreurs));
+  assert.equal(out.espritjeu.note, 4.9);
+});
+test('sources : MyLudo sans jeton CSRF dans la page → erreur claire, pas de crash', async () => {
+  const { out } = await run('sources', { nodes: sourcesNodes(), http: myludoHttp({ [MYL + '/']: { statusCode: 200, headers: {}, body: '<html></html>' } }) });
+  assert.equal(out.myludo, null);
+  assert.ok(out.erreurs.some(e => /myludo: .*(jeton|csrf)/i.test(e)), JSON.stringify(out.erreurs));
 });
 test('sources : « château combo » → titre Esprit Jeu à accents lu via arraybuffer + latin1', async () => {
   const ejSearch = 'https://www.espritjeu.com/dhtml/resultat_recherche.php?keywords=ch%C3%A2teau%20combo';
