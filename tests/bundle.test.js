@@ -35,8 +35,13 @@ const myludoResp = o => {
   if (o.url === MYL + '/') return { statusCode: 200, headers: { 'set-cookie': ['MYLUDO_SESSID=abc123; path=/; HttpOnly'] }, body: '<meta name="csrf-token" content="TOK123">' };
   const ok = o.headers['X-Csrf-Token'] === 'TOK123' && /MYLUDO_SESSID=abc123/.test(o.headers.Cookie || '');
   if (!ok) return { statusCode: 401, body: '{"success":false,"message":"Illegal action"}' };
+  const json = n => JSON.parse(fs.readFileSync(`${__dirname}/fixtures/${n}`, 'utf8'));
   if (o.url.includes('/search/')) return { statusCode: 200, body: fs.readFileSync(`${__dirname}/fixtures/myludo-search-clank.json`, 'utf8') };
-  return { statusCode: 200, body: JSON.parse(fs.readFileSync(`${__dirname}/fixtures/myludo-game-clank.json`, 'utf8')) }; // objet déjà parsé : n8n le fait selon le content-type
+  if (o.url.includes('type=info')) return { statusCode: 200, body: json('myludo-info-clank.json') };
+  if (o.url.includes('/theme/datas.php')) { const t = json('myludo-tags-clank.json')[/id=(\d+)/.exec(o.url)[1]]; return { statusCode: 200, body: { count: t.count, list: t.list } }; }
+  const id = /id=(\d+)/.exec(o.url)[1];
+  if (id !== '19410') return { statusCode: 200, body: { id, code: 'jeu-' + id, title: 'Jeu ' + id, rating: { game: { audience: 100, note: '7,5' } } } }; // fiche d'un jeu semblable : factice (seule la note est lue)
+  return { statusCode: 200, body: json('myludo-game-clank.json') }; // objet déjà parsé : n8n le fait selon le content-type
 };
 const serve = (overrides = {}, routes = ROUTES) => o => {
   if (o.url in overrides) return overrides[o.url];
@@ -66,9 +71,30 @@ test('sources : les 3 boutiques + annonces Okkazeo filtrées à ≤ 10 km, trié
 const myludoHttp = (extra = {}) => o => (o.url in extra ? extra[o.url] : serve()(o));
 test('sources : note de la communauté MyLudo (jeton CSRF + cookie transmis)', async () => {
   const { out, calls } = await run('sources', { nodes: sourcesNodes(), http: myludoHttp() });
-  assert.deepEqual(out.myludo, { note: 8.3, avis: 1500, titre: 'Clank!', url: 'https://www.myludo.fr/#!/game/clank-19410' });
+  assert.deepEqual([out.myludo.note, out.myludo.avis, out.myludo.titre, out.myludo.url], [8.3, 1500, 'Clank!', 'https://www.myludo.fr/#!/game/clank-19410']);
+  assert.deepEqual([out.myludo.joueurs, out.myludo.duree, out.myludo.complexite, out.myludo.annee], ['2 — 4', 60, 2.5, 2017]);
   assert.ok(out.liens.myludo.includes('myludo.fr') && out.liens.myludo.includes('clank'));
   assert.ok(calls.filter(c => c.url.includes('/views/')).every(c => c.headers['X-Requested-With'] === 'XMLHttpRequest'));
+});
+test('sources : MyLudo → 5 mécaniques, 3 semblables avec leur note', async () => {
+  const { out } = await run('sources', { nodes: sourcesNodes(), http: myludoHttp() });
+  assert.equal(out.myludo.mecaniques.length, 5);
+  assert.ok(out.myludo.mecaniques.includes('Deck building'));
+  assert.deepEqual(out.myludo.themes, ['Dragons', 'Exploration', 'Médiéval Fantastique']);
+  assert.equal(out.myludo.similaires.length, 3);
+  assert.ok(out.myludo.similaires.every(s => s.note === 7.5 && s.avis === 100 && s.url.includes('myludo.fr')));
+  assert.deepEqual(out.erreurs, []);
+});
+test('sources : liste d’un tag en panne → les autres mécaniques servent, la note reste', async () => {
+  const { out } = await run('sources', { nodes: sourcesNodes(), http: o => (o.url.includes('theme/datas.php') && o.url.includes('id=22&') ? { statusCode: 500, body: '' } : myludoHttp()(o)) });
+  assert.equal(out.myludo.note, 8.3);
+  assert.equal(out.myludo.mecaniques.length, 5);
+  assert.ok(!out.myludo.mecaniques.includes('Deck building'));
+});
+test('sources : fiche détaillée MyLudo en panne → note conservée, mécaniques et semblables null', async () => {
+  const { out } = await run('sources', { nodes: sourcesNodes(), http: o => (o.url.includes('type=info') ? { statusCode: 500, body: '' } : myludoHttp()(o)) });
+  assert.equal(out.myludo.note, 8.3);
+  assert.deepEqual([out.myludo.mecaniques, out.myludo.similaires], [null, null]);
 });
 test('sources : MyLudo en panne → null + erreur, le reste est servi', async () => {
   const { out } = await run('sources', { nodes: sourcesNodes(), http: myludoHttp({ [MYL + '/']: { statusCode: 403, body: '' } }) });

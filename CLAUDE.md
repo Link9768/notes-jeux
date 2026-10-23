@@ -43,22 +43,22 @@ Spec : `../docs/2026-10-13_notes-jeux-dashboard-design.md` · Plan : `../docs/20
 - Philibert : un jeu sans avis (ex. Clank! VF) n'a pas de `aggregateRating` → « pas encore d'avis ».
 - Dans un shell Windows, `curl "...?q=château"` envoie du Latin-1 : tester avec `scripts/smoke.mjs`.
 
-## À faire : BGG (token requis)
+## BGG : abandonné
 
-La recherche par nom de BGG exige un token (`api.geekdo.com/xmlapi2` → 401 sans lui ; `boardgamegeek.com` → Cloudflare 403). Tant qu'il manque, la tuile BGG affiche « indisponible » (durée et difficulté absentes aussi).
-
-1. Créer une application et un token sur <https://boardgamegeek.com/applications>.
-2. Dans n8n : credential **Header Auth** « BGG API » (`Authorization` = `Bearer <token>`), saisie dans l'interface n8n uniquement (jamais dans un node ni dans le chat).
-3. Sur les nodes `BGG Search` et `BGG Thing` : Authentication = Generic → Header Auth → « BGG API ».
-4. Capturer `tests/fixtures/bgg-search-clank.xml` et `bgg-thing-clank.xml` (avec la sonde, réactivée le temps du test) et **ajouter un test sur ces vraies pages** (les tests BGG actuels utilisent du XML écrit à la main : *déduit*, non vérifié).
-5. Vérifier une exécution réelle : `node scripts/smoke.mjs "clank" "drillers" "les aventuriers du rail"` (attendus : Clank! ≈ 7,8 · Drillers ≈ 7,9 / poids ≈ 2,66 / 30–120 min · Ticket to Ride pour les Aventuriers du Rail).
-
-Repli sans token (non officiel, non testé en production) : `api.geekdo.com/api/geekitems?objecttype=thing&objectid=<id>` et `.../api/dynamicinfo?...` répondent sans token mais ne permettent pas de chercher par nom.
+La recherche par nom de BGG exige un token qu'on n'a pas (`api.geekdo.com/xmlapi2` → 401, `boardgamegeek.com` → Cloudflare 403). La page n'affiche plus de tuile BGG ; MyLudo la remplace (voir plus bas). Les nodes BGG du workflow restent en place mais renvoient `null` (`bgg` n'est plus lu par le front).
 
 ## Sécurité
 
 Le webhook est public et déclenche environ 8 requêtes vers des sites tiers par appel (2 par boutique + 2 BGG) : acceptable pour un usage perso. Si besoin, ajouter une clé simple dans l'URL et la vérifier dans un node du workflow.
 
-## MyLudo (note de la communauté, sur 10)
+## MyLudo (grand encart : note, infos, style de jeu, semblables)
 
-Tuile « MyLudo » : `rating.game.note` de l'API interne de MyLudo (non officielle). Elle exige le jeton CSRF de la page d'accueil et le cookie de session (3 requêtes : accueil, recherche, fiche) ; détail dans `docs/sources.md`. Jeu de base préféré aux extensions. Si l'API change, la tuile passe en « indisponible » sans casser le reste.
+API interne non officielle, 3 requêtes de base (accueil → jeton CSRF + cookie, recherche, fiche) ; détail dans `docs/sources.md`. Jeu de base préféré aux extensions. Si l'API change, l'encart passe en « indisponible » sans casser le reste.
+
+- **Note** : `rating.game.note` (sur 10). **Infos** : `players`, `age`, `time_min/max`, `rating.complexity.note` (sur 5).
+- **Style de jeu** : `game/datas.php?type=info` → `themes.mecanisme` (+ `themes.theme`). On affiche les 5 mécaniques les plus **rares** (comptage `count` du tag, jeux de base seulement), pas les plus courantes.
+- **Semblable à** : pour chaque mécanique, `theme/datas.php?type=games&id=<tag>&order=byrankdesc&filter=basegame&limit=100` (les 100 mieux classés). Score = nombre de mécaniques partagées, pondéré par `1/√count` (une mécanique rare pèse plus). Exclus : le jeu, sa gamme (titre commençant par le sien), doublons d'éditions, non-jeux de base. Il faut ≥ 2 mécaniques en commun. 3 jeux, avec leur note (1 requête fiche chacun).
+- Coût : ~14 requêtes MyLudo par recherche (≤ 10 mécaniques). Mécaniques/semblables en panne → `null` (« indisponible »), la note reste.
+- Mécaniques en **français** (MyLudo) : pas les libellés BGG (« Push Your Luck »).
+- Limites vues en production : les « semblables » restent approximatifs (Abyss → Râ pertinent, les deux autres moins) ; MyLudo liste des jeux datés dans le futur (2027) ; `rating.game` peut être vide pour un jeu récent (Drillers).
+- Fixtures : `tests/fixtures/myludo-info-*.json` et `myludo-tags-clank.json` (listes allégées à id/code/title/edition/type).

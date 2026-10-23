@@ -33,3 +33,9 @@
 - Fiche : `GET /views/game/datas.php?type=game&id=<id>` → `rating.game` : `note` (« 8,3 », sur 10), `audience` (nombre de notes), `average`, `weighted`. Lien public : `https://www.myludo.fr/#!/game/<code>-<id>`.
 - Clank! (19410) : 8,3 / 1 500 notes ; 7 Wonders Duel : 8,5 / 4 150 ; Drillers : fiche sans note.
 - API non documentée : peut changer sans préavis.
+
+## MyLudo — mécaniques et jeux semblables (vérifié le 2026-10-23, depuis n8n)
+- Fiche détaillée : `GET /views/game/datas.php?type=info&id=<id>` → `themes` = { `univers`, `gamme`, `categorie`, `theme`, `mecanisme` }, chacun `{ "<slug>-<idTag>": "Libellé" }` (ex. `"deck-building-22": "Deck building"`). Clank! : Card-driven, Course, Deck building, Élimination, Exploration, Parcours, Prise de risque. Abyss : Collection, Combinaison, Enchères, Gestion de main, Pioche, Stop ou encore.
+- Jeux d'un tag (le clic sur un tag du site) : `GET /views/theme/datas.php?type=games&id=<idTag>&order=<tri>&filter=basegame&limit=100` → `count` (nombre de jeux) + `list[]` (18 par défaut, 100 max testé). Tri utile : `byrankdesc` (classement MyLudo). `byrating*`, `bynote*`, `bycollected*`… ne trient pas. Sans `order` : alphabétique. `filter=basegame` retire extensions et goodies (deck building : 2 983 → 841).
+- Les éléments de `list` n'ont **pas** de note : une requête `type=game` par jeu pour l'afficher.
+- `type=game&raw=1` renvoie une réponse vide (réservé aux comptes connectés). `type=tags|similar|related|themes…` sur `game/datas.php` → `[]`.
