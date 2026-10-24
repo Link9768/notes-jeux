@@ -7,7 +7,7 @@ const vm = require('node:vm');
 const html = fs.readFileSync(`${__dirname}/../index.html`, 'utf8');
 const script = html.match(/<script>([\s\S]*?)<\/script>/)[1];
 const el = () => ({ addEventListener() {}, value: '', innerHTML: '' });
-const front = vm.runInNewContext(`${script}; ({ okk, tile, fr, myludo, liens, findBga, bgaBadge, auteur, retour, pile })`, {
+const front = vm.runInNewContext(`${script}; ({ okk, tile, fr, myludo, liens, findBga, bgaBadge, auteur, retour, pile, panierHtml })`, {
   document: { querySelector: el }, location: { search: '' }, history: {}, fetch: async () => { throw new Error('pas de réseau'); }, URLSearchParams,
 });
 
@@ -116,4 +116,30 @@ test('bouton retour : absent sans historique, sinon « Retour à <jeu précéden
   front.pile.push({ query: 'abyss', myludo: null });
   assert.ok(front.retour().includes('Retour à abyss'));
   front.pile.length = 0;
+});
+
+const panier = { jeux: [{ demande: '7 wonders duel', titre: '7 Wonders Duel', url: 'https://www.okkazeo.com/jeux/1/x', annonces: 22 }, { demande: 'zzz', titre: null, url: null, annonces: 0 }],
+  vendeurs: [{ vendeur: 'gegeor', ville: 'Paris', cp: '75016', procheParis: true, envoi: false, nbJeux: 2, total: 38,
+    annonces: [{ jeu: '7 Wonders Duel', prix: 18, etat: 'neuf', url: 'https://www.okkazeo.com/annonces/1/a' }, { jeu: 'Carcassonne', prix: 20, etat: 'neuf', url: 'https://www.okkazeo.com/annonces/2/b' }] }], erreurs: [] };
+test('matchmaking : jeux trouvés ou non, vendeur avec ses annonces cliquables, près de Paris', () => {
+  const h = front.panierHtml(panier);
+  for (const x of ['7 Wonders Duel', '22 annonces', 'zzz : introuvable sur Okkazeo', 'gegeor', 'Paris', '(75016)', 'près de Paris', '2 jeux', '38 €', 'Carcassonne', 'href="https://www.okkazeo.com/annonces/2/b"']) assert.ok(h.includes(x), x);
+});
+test('matchmaking : aucun vendeur commun → message ; erreurs affichées ; texte échappé', () => {
+  assert.ok(front.panierHtml({ ...panier, vendeurs: [] }).includes('Aucun vendeur ne propose au moins 2 de ces jeux'));
+  assert.ok(front.panierHtml({ ...panier, erreurs: ['azul: HTTP 403'] }).includes('azul: HTTP 403'));
+  assert.ok(!front.panierHtml({ ...panier, vendeurs: [{ ...panier.vendeurs[0], vendeur: '<img src=x>' }] }).includes('<img src=x>'));
+});
+test('cache : un jeu déjà chargé se réaffiche sans nouvel appel au webhook', async () => {
+  let appels = 0;
+  const out = { innerHTML: '', addEventListener() {} };
+  const ctx = {
+    document: { querySelector: s => (s === '#out' ? out : el()) }, location: { search: '' }, history: { replaceState() {} }, URLSearchParams,
+    fetch: async u => { if (String(u).includes('/webhook/notes-jeux?')) { appels++; return { ok: true, json: async () => ({ query: 'abyss', myludo: null, liens: { bgg: '#' }, okkazeo: null }) }; } return { ok: false }; },
+  };
+  const f = vm.runInNewContext(`${script}; ({ search })`, ctx);
+  await f.search('abyss');
+  await f.search('Abyss ');
+  assert.equal(appels, 1);
+  assert.ok(out.innerHTML.includes('abyss'));
 });

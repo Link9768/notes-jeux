@@ -194,6 +194,43 @@ test('sources : requête tronquée à 100 caractères', async () => {
   const { out } = await run('sources', { nodes: sourcesNodes('a'.repeat(300)), http: serve() });
   assert.equal(out.query.length, 100);
 });
+// Matchmaking : pages Okkazeo enregistrées, pseudos (anonymisés en « vendeur ») remplacés dans l'ordre par des noms choisis.
+const renomme = (html, noms) => { let i = 0; return html.replace(/<b>vendeur<\/b>/g, () => `<b>${noms[i++] || 'autre-' + i + '-' + Math.random()}</b>`); };
+const OK_DIXIT = 'https://www.okkazeo.com/jeux/resultats?rech_nom=dixit%3A%20odyssey';
+const panierHttp = o => {
+  const pages = {
+    [OK_SEARCH]: fx('okkazeo-search-clank.html'),
+    [OK_PRODUCT]: renomme(fx('okkazeo-clank.html'), ['Alice', 'Bob']),
+    [OK_DIXIT]: fx('okkazeo-search-dixit-odyssey.html'),
+    'https://www.okkazeo.com/jeux/85748/dixit-odyssey': renomme(fx('okkazeo-dixit-85748.html'), ['Alice']),
+    'https://www.okkazeo.com/jeux/90287/dixit-odyssey': renomme(fx('okkazeo-dixit-90287.html'), ['Bob']),
+    'https://www.okkazeo.com/jeux/resultats?rech_nom=azertyuiop': fx('okkazeo-search-vide.html'),
+  };
+  return o.url in pages ? { statusCode: 200, body: pages[o.url] } : { statusCode: 404, body: '' };
+};
+const panierNodes = jeux => ({ Webhook: { query: { jeux } } });
+test('panier : vendeurs qui ont plusieurs jeux de la liste (Alice et Bob ont Clank! et Dixit Odyssey)', async () => {
+  const { out, calls } = await run('panier', { nodes: panierNodes('clank|dixit: odyssey|azertyuiop'), http: panierHttp });
+  assert.deepEqual(out.vendeurs.map(v => v.vendeur).sort(), ['Alice', 'Bob']);
+  assert.ok(out.vendeurs.every(v => v.nbJeux === 2 && v.annonces.every(a => a.url.startsWith('https://www.okkazeo.com/annonces/'))));
+  assert.deepEqual(out.vendeurs[0].annonces.map(a => a.jeu).sort(), ['Clank!', 'Dixit Odyssey']);
+  assert.deepEqual(out.jeux.map(j => [j.demande, j.titre, j.annonces]), [['clank', 'Clank!', 14], ['dixit: odyssey', 'Dixit Odyssey', out.jeux[1].annonces], ['azertyuiop', null, 0]]);
+  assert.ok(out.jeux[1].annonces > 0);
+  assert.deepEqual(out.erreurs, []);
+  assert.ok(calls.every(c => c.headers['Sec-Fetch-Dest'] === 'document' && c.timeout === 10000));
+});
+test('panier : un jeu en panne (403) → erreur pour ce jeu, les autres servent', async () => {
+  const { out } = await run('panier', { nodes: panierNodes('clank|dixit: odyssey'), http: o => (o.url === OK_DIXIT ? { statusCode: 403, body: '' } : panierHttp(o)) });
+  assert.equal(out.jeux[0].annonces, 14);
+  assert.equal(out.jeux[1].titre, null);
+  assert.ok(out.erreurs[0].startsWith('dixit: odyssey:'), JSON.stringify(out.erreurs));
+  assert.deepEqual(out.vendeurs, []);
+});
+test('panier : moins de 2 jeux → aucune requête', async () => {
+  const { out, calls } = await run('panier', { nodes: panierNodes('clank'), http: panierHttp });
+  assert.deepEqual(out.erreurs, ['au moins 2 jeux']);
+  assert.equal(calls.length, 0);
+});
 test('bgg-candidats : ids depuis le XML de recherche, toujours 1 item', async () => {
   const xml = '<items><item type="boardgame" id="201808"><name type="primary" value="Clank!"/></item></items>';
   const { out } = await run('bgg-candidats', { nodes: { Webhook: { query: { q: 'clank' } } }, input: { data: xml } });

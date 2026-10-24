@@ -15,7 +15,6 @@ input{flex:1;min-width:0;padding:12px;border-radius:10px;border:1px solid var(--
 input:focus-visible,button:focus-visible,a:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
 button{padding:12px 18px;border:0;border-radius:10px;background:var(--acc);color:#fff;font-weight:600;font-size:15px;cursor:pointer}
 a{color:var(--acc)}
-.layout{display:grid;grid-template-columns:1.35fr 1fr;gap:14px}
 .head{display:flex;gap:12px;align-items:center;margin-bottom:12px}
 .head img{width:64px;height:64px;object-fit:cover;border-radius:10px;background:var(--card)}
 .head h1{font-size:20px;margin:0}
@@ -52,7 +51,7 @@ a{color:var(--acc)}
 .bga.oui:hover{background:#34c75966}
 .bga.non{background:var(--line);color:var(--mut)}
 .ml footer{padding:10px;text-align:center;border-top:1px solid var(--line)}
-.okk{border:2px solid var(--okk);border-radius:12px;overflow:hidden;align-self:start}
+.okk{border:2px solid var(--okk);border-radius:12px;overflow:hidden;margin-top:14px}
 .okk header{background:var(--okk);color:#fff;padding:10px 12px}
 .okk header b{font-size:15px}
 .ann{display:grid;grid-template-columns:60px 1fr auto;gap:8px;padding:9px 12px;border-bottom:1px solid var(--line);align-items:center}
@@ -60,16 +59,32 @@ a{color:var(--acc)}
 .tag.ok{background:#34c75933;color:var(--ok)}
 .okk footer{padding:10px;text-align:center}
 .okk footer a{color:var(--okk);font-weight:700}
+.panier{border:2px solid var(--okk);border-radius:12px;overflow:hidden;margin-top:14px}
+.panier header{background:var(--okk);color:#fff;padding:10px 12px;display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline}
+.panier header b{font-size:15px}
+.panier form{display:flex;gap:8px;padding:12px;margin:0;align-items:flex-start}
+.panier textarea{flex:1;min-width:0;padding:10px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--txt);font:inherit;font-size:15px;resize:vertical}
+.panier button{background:var(--okk)}
+#pr{padding:0 12px 12px;display:grid;gap:10px}
+.vend{border:1px solid var(--line);border-radius:10px;padding:10px}
+.vend .top{display:flex;flex-wrap:wrap;gap:4px 8px;align-items:baseline;margin-bottom:4px}
+.vend .top .right{margin-left:auto}
+.ann2{display:flex;justify-content:space-between;gap:8px;padding:5px 0;border-top:1px solid var(--line)}
 .skel{height:14px;border-radius:6px;margin:8px 0;background:linear-gradient(90deg,var(--line),#3a3a42,var(--line));background-size:200% 100%;animation:sk 1.2s infinite}
 @keyframes sk{to{background-position:-200% 0}}
 @media (prefers-reduced-motion:reduce){.skel{animation:none}}
-@media (max-width:760px){.layout{grid-template-columns:1fr}.tiles{grid-template-columns:repeat(2,1fr)}.tile{padding:8px}.big{font-size:20px}.head img{width:44px;height:44px}.ann{grid-template-columns:52px 1fr auto}}
+@media (max-width:760px){.panier form{flex-direction:column;align-items:stretch}.tiles{grid-template-columns:repeat(2,1fr)}.tile{padding:8px}.big{font-size:20px}.head img{width:44px;height:44px}.ann{grid-template-columns:52px 1fr auto}}
 </style>
 </head>
 <body>
 <main>
   <form id="f"><input id="q" aria-label="Nom du jeu" placeholder="Nom du jeu (ex. Clank)" autocomplete="off" enterkeyhint="search"><button>Rechercher</button></form>
   <div id="out" aria-live="polite"></div>
+  <section class="panier">
+    <header><b>Matchmaking Okkazeo</b><span>vendeurs qui ont plusieurs jeux de ta liste</span></header>
+    <form id="pf"><textarea id="pj" rows="4" aria-label="Jeux recherchés, un par ligne" placeholder="Un jeu par ligne (2 à 8)&#10;7 Wonders Duel&#10;Carcassonne&#10;Azul"></textarea><button>Chercher les vendeurs</button></form>
+    <div id="pr" aria-live="polite"></div>
+  </section>
 </main>
 <script>
 const API = 'https://n8n.srv1250642.hstgr.cloud/webhook/notes-jeux';
@@ -185,22 +200,35 @@ function render(d, games) {
     ? `<div class="head">${m.image ? `<img src="${esc(m.image)}" alt="">` : ''}<div><h1>${esc(m.titre)}</h1><div class="mut">${[m.annee, m.joueurs && m.joueurs + ' joueurs', m.age].filter(Boolean).map(esc).join(' · ')}${bgaBadge(d, games)}</div></div></div>`
     : `<div class="head"><div><h1>${esc(d.query)}</h1><div class="mut">${bgaBadge(d, games)}</div></div></div>`;
   const tiles = `<div class="tiles">${tile('Esprit Jeu', 'var(--ej)', d.espritjeu, 5, 'avis', L.espritjeu)}${tile('Philibert', 'var(--ph)', d.philibert, 5, 'avis', L.philibert)}</div>`;
-  $('#out').innerHTML = `${retour()}<div class="layout"><div>${head}${tiles}${myludo(m, L.myludo || '#')}${liens(d, games)}</div>${okk(d.okkazeo, L.okkazeo)}</div>${auteur(m)}`;
+  $('#out').innerHTML = `${retour()}${head}${tiles}${myludo(m, L.myludo || '#')}${liens(d, games)}${auteur(m)}${okk(d.okkazeo, L.okkazeo)}`;
 }
 
 function skeleton() {
   const t = n => `<div class="tile"><div class="src">${n}</div><div class="skel" style="width:50%;height:22px"></div><div class="skel" style="width:70%"></div></div>`;
-  return `<div class="layout"><div><div class="tiles">${t('Esprit Jeu')}${t('Philibert')}</div><section class="ml"><header><b>MyLudo</b></header><div class="body"><div class="skel"></div><div class="skel"></div><div class="skel"></div></div></section></div><section class="okk"><header><b>Okkazeo</b></header><div style="padding:12px"><div class="skel"></div><div class="skel"></div><div class="skel"></div></div></section></div>`;
+  const bloc = (cls, nom) => `<section class="${cls}"><header><b>${nom}</b></header><div style="padding:12px"><div class="skel"></div><div class="skel"></div><div class="skel"></div></div></section>`;
+  return `<div class="tiles">${t('Esprit Jeu')}${t('Philibert')}</div>${bloc('ml', 'MyLudo')}${bloc('okk', 'Okkazeo')}`;
 }
+
+// Résultats déjà chargés, réaffichés sans rechargement pendant 15 min (clé : la recherche en minuscules).
+const CACHE = new Map();
+const CACHE_MS = 15 * 60 * 1000;
 
 async function search(q) {
   const my = ++seq;
+  const cle = q.trim().toLowerCase();
+  const c = CACHE.get(cle);
+  if (c && Date.now() - c.t < CACHE_MS) {
+    const games = await BGA;
+    if (my === seq) { courant = c.d; render(c.d, games); }
+    return;
+  }
   $('#out').innerHTML = skeleton();
   try {
     const r = await fetch(API + '?q=' + encodeURIComponent(q));
     if (!r.ok) throw new Error('HTTP ' + r.status);
     const d = await r.json();
     const games = await BGA;
+    CACHE.set(cle, { d, t: Date.now() });
     if (my === seq) { courant = d; render(d, games); }
   } catch (err) {
     if (my === seq) $('#out').innerHTML = `${retour()}<p class="na">Recherche impossible (${esc(err.message)}). Réessaie dans un instant.</p>`;
@@ -238,6 +266,33 @@ async function revenir() {
   render(prev, await BGA);
   scrollTo(0, 0);
 }
+
+// Matchmaking Okkazeo (workflow « Notes Jeux — Panier ») : vendeurs qui proposent au moins 2 des jeux de la liste.
+const API_PANIER = 'https://n8n.srv1250642.hstgr.cloud/webhook/notes-jeux-panier';
+function panierHtml(p) {
+  const jeux = (p.jeux || []).map(j => (j.titre
+    ? `<span class="chip">${ext(j.url, esc(j.titre))} · ${j.annonces} annonce${j.annonces > 1 ? 's' : ''}</span>`
+    : `<span class="chip th">${esc(j.demande)} : introuvable sur Okkazeo</span>`)).join('');
+  const vendeurs = (p.vendeurs || []).length
+    ? p.vendeurs.map(v => `<div class="vend"><div class="top"><b>${esc(v.vendeur)}</b><span class="mut">${esc(v.ville ?? '')}${v.cp ? ` (${esc(v.cp)})` : ''}</span>${v.procheParis ? '<span class="tag ok">près de Paris</span>' : ''}${v.envoi ? '<span class="tag">envoi</span>' : ''}<span class="right"><b>${v.nbJeux} jeux</b> · ${fr(v.total)} €</span></div>${v.annonces.map(a => `<div class="ann2"><span>${esc(a.jeu)} <span class="mut">${esc(a.etat ?? '')}</span></span><span>${fr(a.prix)} € ${a.url ? ext(a.url, 'annonce ↗') : ''}</span></div>`).join('')}</div>`).join('')
+    : '<p class="na">Aucun vendeur ne propose au moins 2 de ces jeux.</p>';
+  const err = (p.erreurs || []).length ? `<p class="mut">Problème : ${esc(p.erreurs.join(' · '))}</p>` : '';
+  return `<div class="chips">${jeux}</div>${vendeurs}${err}`;
+}
+
+$('#pf').addEventListener('submit', async e => {
+  e.preventDefault();
+  const jeux = $('#pj').value.split(/[\n,;|]+/).map(x => x.trim()).filter(Boolean);
+  if (jeux.length < 2) { $('#pr').innerHTML = '<p class="na">Mets au moins 2 jeux (un par ligne).</p>'; return; }
+  $('#pr').innerHTML = '<div class="skel"></div><div class="skel"></div><div class="skel"></div>';
+  try {
+    const r = await fetch(API_PANIER + '?jeux=' + encodeURIComponent(jeux.join('|')));
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    $('#pr').innerHTML = panierHtml(await r.json());
+  } catch (err) {
+    $('#pr').innerHTML = `<p class="na">Recherche impossible (${esc(err.message)}). Réessaie dans un instant.</p>`;
+  }
+});
 
 const initial = new URLSearchParams(location.search).get('q');
 if (initial) { $('#q').value = initial; search(initial.trim()); }

@@ -10,6 +10,8 @@ Spec : `../docs/2026-10-13_notes-jeux-dashboard-design.md` · Plan : `../docs/20
 |---|---|
 | Webhook (GET `?q=<nom>`) | `https://n8n.srv1250642.hstgr.cloud/webhook/notes-jeux` |
 | Workflow n8n « Notes Jeux — API » | `wA0aeGJ9Uh0FqKnW` (actif, `webhookId` `7c1e4a52-9d3b-4f6e-8a21-5b0c9e3d7f14`) |
+| Webhook matchmaking (GET `?jeux=A|B|C`) | `https://n8n.srv1250642.hstgr.cloud/webhook/notes-jeux-panier` |
+| Workflow n8n « Notes Jeux — Panier » | `BpOByDLzTv8MtBky` (actif, `webhookId` `10db9f42-1e86-4a88-ab2b-de28f39f6c84`) |
 | Workflow de sonde (jetable, **désactivé**) | `VyS0j6QufSY69IpC` — webhook ouvert qui récupère n'importe quelle URL : ne le laisser actif que le temps d'un test |
 | Page publique prévue | `https://link9768.github.io/notes-jeux/` (repo `Link9768/notes-jeux`) |
 
@@ -17,7 +19,7 @@ Spec : `../docs/2026-10-13_notes-jeux-dashboard-design.md` · Plan : `../docs/20
 
 - `index.html` — front (thème sombre, responsive, lit `?q=`).
 - `lib/*.js` — logique testée : `match.js` (choix du produit), `jsonld.js`, `okkazeo.js` (annonces), `sites.js` (recherches des boutiques), `bgg.js`, `cp-paris-10km.json`.
-- `n8n/code/*.body.js` — corps des 3 nodes Code ; `scripts/bundle.mjs` colle `lib/` + corps = **le code déployé**.
+- `n8n/code/*.body.js` — corps des 4 nodes Code (dont `panier`, workflow à part) ; `scripts/bundle.mjs` colle `lib/` + corps = **le code déployé**.
 - `n8n/Notes Jeux API.json` — export du workflow (la source de vérité reste l'instance n8n).
 - `scripts/` — `build-cp-list.mjs` (codes postaux), `bundle.mjs`, `verify-deployed.mjs`, `smoke.mjs`.
 - `tests/` — `node --test "tests/*.test.js"` (⚠ le glob est obligatoire : `node --test tests/` ne fonctionne pas). `tests/fixtures/` = vraies pages enregistrées le 2026-10-13.
@@ -25,8 +27,8 @@ Spec : `../docs/2026-10-13_notes-jeux-dashboard-design.md` · Plan : `../docs/20
 ## Modifier un node Code
 
 1. Modifier `lib/` ou `n8n/code/*.body.js`, **test d'abord** (`tests/bundle.test.js` exécute le code exact du node avec n8n simulé).
-2. `node scripts/bundle.mjs sources` (ou `bgg-candidats`, `bgg-fiche`) → coller le résultat avec `n8n_update_partial_workflow` (`updateNode`, `parameters.jsCode`).
-3. `node scripts/verify-deployed.mjs --export` → doit afficher `IDENTIQUE` pour les 3 nodes (lit la clé d'API dans `../.mcp.json`, ne l'affiche pas), puis `node scripts/smoke.mjs "clank" "catane"`.
+2. `node scripts/bundle.mjs sources` (ou `bgg-candidats`, `bgg-fiche`, `panier`) → coller le résultat avec `n8n_update_partial_workflow` (`updateNode`, `parameters.jsCode`).
+3. `node scripts/verify-deployed.mjs --export` → doit afficher `IDENTIQUE` pour les 4 nodes (lit la clé d'API dans `../.mcp.json`, ne l'affiche pas), puis `node scripts/smoke.mjs "clank" "catane"`.
 
 ## Pièges vérifiés
 
@@ -51,9 +53,17 @@ La recherche par nom de BGG exige un token qu'on n'a pas (`api.geekdo.com/xmlapi
 
 **Board Game Arena** : la page charge `lib/bga-games.json` (même site GitHub Pages) et fait la correspondance dans le navigateur (`findBga` dans `index.html` : titre exact, puis à une lettre près, alias de 5 lettres et plus ; titres testés = la recherche et le titre MyLudo). pastille « BGA ✓ » cliquable (`gamepanel?game=<slug>`) à côté du nombre de joueurs si le jeu y est, « BGA » avec coche barrée sinon, rien si la liste est injoignable (ouverture en `file://`). La liste vient de la page `boardgamearena.com/gamelist` (`game_list`) : `node scripts/build-bga-list.mjs` la régénère (1 146 jeux publics le 2026-10-24), puis commit + push. Les titres français ne correspondent que si MyLudo donne le titre anglais ou si BGA a l'alias.
 
+## Matchmaking Okkazeo (workflow « Notes Jeux — Panier »)
+
+Case en bas de page : 2 à 8 jeux (un par ligne) → vendeurs Okkazeo qui en proposent au moins 2 (`lib/panier.js`). Par jeu : recherche Okkazeo (titre exact), puis annonces des éditions qui en ont (3 max) ; 3 jeux en parallèle. Une annonce = `<article class="text-left jeu">` : pseudo (« Vendu par <b>…</b> »), prix, lien `/annonces/<id>`, ville (CP), état, pastille `sticker envoi`. Vendeur = pseudo (casse ignorée), annonce la moins chère par jeu ; tri : nombre de jeux, près de Paris (`cp-paris-10km.json`), total. Vérifié le 2026-10-24 : 7 Wonders Duel + Carcassonne chez un vendeur de Paris 16e, réponse en 0,6 s. Pseudos anonymisés dans les fixtures : les tests les remplacent par des noms choisis.
+
+## Page : cache et bouton retour
+
+Les résultats déjà chargés sont gardés 15 min en mémoire de la page (clé : recherche en minuscules) : re-cliquer sur un jeu déjà vu ne rappelle pas le webhook. 🔍 sur un jeu (semblables, même auteur) empile l'écran courant ; « ← Retour à … » le réaffiche sans réseau.
+
 ## Sécurité
 
-Le webhook est public et déclenche environ 8 requêtes vers des sites tiers par appel (2 par boutique + 2 BGG) : acceptable pour un usage perso. Si besoin, ajouter une clé simple dans l'URL et la vérifier dans un node du workflow.
+Les webhooks sont publics. La recherche déclenche environ 8 requêtes vers des sites tiers par appel (2 par boutique + 2 BGG) : acceptable pour un usage perso. Si besoin, ajouter une clé simple dans l'URL et la vérifier dans un node du workflow.
 
 ## MyLudo (grand encart : note, infos, style de jeu, semblables)
 

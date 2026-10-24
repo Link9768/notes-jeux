@@ -1,0 +1,90 @@
+{
+  "name": "Notes Jeux — Panier",
+  "nodes": [
+    {
+      "id": "b1c2d3e4-0001-4a00-9000-000000000001",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "10db9f42-1e86-4a88-ab2b-de28f39f6c84",
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "notes-jeux-panier",
+        "responseMode": "responseNode",
+        "options": {}
+      }
+    },
+    {
+      "id": "b1c2d3e4-0002-4a00-9000-000000000002",
+      "name": "Panier",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        260,
+        0
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "// ---- lib/match.js\n// Choix automatique du produit. Collé tel quel en tête des nodes Code n8n (voir scripts/bundle.mjs).\nconst ACCESSORY_RE = /sleeve|pochette|sticker|autocollant|\\bkit\\b|feuille de score|piste de suivi|figurine|\\bsacs?\\b|insert|organiseur|playmat|tapis de jeu|goodies/i;\n\n// Accents combinants (plage U+0300 a U+036F) : construits sans echappement unicode, que n8n transforme a l enregistrement.\nconst COMBINING_RE = new RegExp('[' + String.fromCharCode(0x300) + '-' + String.fromCharCode(0x36f) + ']', 'g');\n\nfunction normalize(s) {\n  return String(s || '')\n    .normalize('NFD').replace(COMBINING_RE, '')\n    .toLowerCase()\n    .replace(/\\((vf|vo|fr|en|version francaise|version anglaise)\\)/g, ' ')\n    .replace(/[^a-z0-9]+/g, ' ')\n    .trim();\n}\n\nfunction isAccessory(title) {\n  return ACCESSORY_RE.test(title || '');\n}\n\n// Vrai si a et b sont égaux à une insertion, suppression ou substitution près.\nfunction within1(a, b) {\n  if (a === b) return true;\n  if (Math.abs(a.length - b.length) > 1) return false;\n  let i = 0;\n  while (i < a.length && i < b.length && a[i] === b[i]) i++;\n  if (a.length === b.length) return a.slice(i + 1) === b.slice(i + 1);\n  return a.length > b.length ? a.slice(i + 1) === b.slice(i) : b.slice(i + 1) === a.slice(i);\n}\n\n// Ordre de préférence : titre exact → titre à une lettre près (« catane » → « Catan ») →\n// titres contenant tous les mots, jeu de base avant extension, dans l'ordre de pertinence du site.\nfunction pickProduct(query, candidates) {\n  const q = normalize(query);\n  const pool = (candidates || []).filter(c => c && c.title && !isAccessory(c.title));\n  if (!q || pool.length === 0) return null;\n  const frFirst = (a, b) => (a.lang === 'fr' ? 0 : 1) - (b.lang === 'fr' ? 0 : 1);\n  const exact = pool.filter(c => normalize(c.title) === q).sort(frFirst);\n  if (exact.length) return exact[0];\n  if (q.length >= 5) {\n    const near = pool.filter(c => within1(normalize(c.title), q)).sort(frFirst);\n    if (near.length) return near[0];\n  }\n  const words = q.split(' ');\n  const all = pool.filter(c => { const t = ` ${normalize(c.title)} `; return words.every(w => t.includes(` ${w} `)); });\n  const isExt = c => /\\bext(ension)?\\b/.test(normalize(c.title));\n  const base = /\\bext(ension)?\\b/.test(q) ? all : all.filter(c => !isExt(c));\n  return [...(base.length ? base : all)].sort(frFirst)[0] || null;\n}\n\nif (typeof module !== 'undefined' && module.exports) module.exports = { normalize, isAccessory, pickProduct };\n\n\n// ---- lib/sites.js\n// Parseurs des pages de recherche (structure observée le 2026-10-13, voir docs/sources.md).\n// Pas de `URL` dans le bac à sable des nodes Code n8n (vérifié le 2026-10-13) : résolution à la main.\nfunction absUrl(base, href) {\n  const h = String(href || '').trim();\n  if (!h) return null;\n  if (/^https?:\\/\\//i.test(h)) return h;\n  if (h.startsWith('//')) return 'https:' + h;\n  const origin = (String(base).match(/^https?:\\/\\/[^/]+/i) || [])[0];\n  if (!origin) return null;\n  return origin + (h.startsWith('/') ? h : '/' + h);\n}\n\nfunction clean(s) {\n  return String(s || '')\n    .replace(/<[^>]+>/g, ' ')\n    .replace(/&amp;/g, '&').replace(/&quot;/g, '\"').replace(/&#0?39;|&#x27;|&apos;/g, \"'\").replace(/&nbsp;/g, ' ')\n    .replace(/\\s+/g, ' ').trim();\n}\n\n// Philibert : une carte = <div class=\"product-card … \" data-pid=\"…\">, titre dans a.product-card__title,\n// langue dans span.product-card__feature, note « x/5 » avant le titre si le produit a des avis.\nfunction parsePhilibertSearch(html) {\n  const out = [];\n  for (const card of String(html || '').split(/(?=<div\\s+class=\"product-card\\s[^\"]*\"\\s+data-pid=)/).slice(1)) {\n    const a = card.match(/<a class=\"h6 mb-0 product-card__title[^\"]*\" href=\"([^\"]+)\">([^<]+)<\\/a>/);\n    if (!a) continue;\n    const features = [...card.matchAll(/<span class=\"product-card__feature\">([^<]*)<\\/span>/g)].map(m => clean(m[1]));\n    const lang = features.includes('Français') ? 'fr' : features.includes('Anglais') ? 'en' : undefined;\n    const n = clean(card.slice(0, a.index)).match(/(\\d(?:[.,]\\d)?)\\/5/);\n    out.push({\n      title: clean(a[2]),\n      url: absUrl('https://www.philibertnet.com/', a[1]),\n      lang,\n      note: n ? parseFloat(n[1].replace(',', '.')) : null,\n    });\n  }\n  return out;\n}\n\n// Esprit Jeu : <h3 class=\"bp_designation\"><a href=\"…\"> Titre </a></h3>\nfunction parseEspritJeuSearch(html) {\n  return [...String(html || '').matchAll(/<h3 class=\"bp_designation\">\\s*<a href=\"([^\"]+)\">\\s*([^<]*?)\\s*<\\/a>/g)]\n    .map(m => ({ title: clean(m[2]), url: absUrl('https://www.espritjeu.com/', m[1]) }))\n    .filter(c => c.title && c.url);\n}\n\n// Okkazeo : un résultat = <article class=\"… jeu …\"> avec <h4 class=\"titre\"><a href=\"/jeux/<id>/<slug>\">Titre</a></h4>\n// et <b>N annonces</b> (nombre d'annonces de cette édition ; null si absent).\nfunction parseOkkazeoSearch(html) {\n  const out = [];\n  for (const art of String(html || '').split(/(?=<article class=\"grid-x box_article jeu)/).slice(1)) {\n    const a = art.match(/<h4 class=\"titre\"><a href=\"(\\/jeux\\/\\d+\\/[^\"]*)\"[^>]*>([^<]*)<\\/a>/);\n    if (!a) continue;\n    const n = art.match(/<b>\\s*(\\d+)\\s+annonces?\\s*<\\/b>/);\n    const c = { title: clean(a[2]), url: absUrl('https://www.okkazeo.com/', a[1]), annonces: n ? Number(n[1]) : null };\n    if (c.title && c.url) out.push(c);\n  }\n  return out;\n}\n\nif (typeof module !== 'undefined' && module.exports) module.exports = { parsePhilibertSearch, parseEspritJeuSearch, parseOkkazeoSearch };\n\n\n// ---- lib/panier.js\n// Matchmaking Okkazeo : quels vendeurs proposent plusieurs des jeux d'une liste ? (node « Panier », voir scripts/bundle.mjs)\n// Une annonce de la fiche d'un jeu = <article class=\"text-left jeu …\"> : lien /annonces/<id>/<slug>, prix, « Vendu par <b>pseudo</b> »,\n// « Ville (CP)<br/> », pastille « sticker envoi » si le vendeur expédie (structure observée le 2026-10-13).\nconst nettoie = t => String(t || '').replace(/&amp;/g, '&').replace(/&quot;/g, '\"').replace(/&#0?39;|&apos;/g, \"'\").replace(/\\s+/g, ' ').trim();\n\nfunction parseAnnoncesArticles(html) {\n  const out = [];\n  for (const art of String(html || '').split(/(?=<article class=\"text-left jeu)/).slice(1)) {\n    const vendeur = (art.match(/Vendu par\\s*<b>([^<]+)<\\/b>/) || [])[1];\n    const prix = art.match(/<span class=\"prix\">\\s*(\\d+)\\s*€\\s*<span class=\"sub\">\\s*(\\d{2})/);\n    if (!vendeur || !prix) continue;\n    const lien = (art.match(/href=\"(\\/annonces\\/\\d+[^\"]*)\"/) || [])[1];\n    const loc = art.match(/([^<>\\n]+?)\\s*\\((\\d{4,5})\\)\\s*<br/);\n    // « Jeu d'occasion (état correct) », « Jeu d'occasion + extensions (état excellent) », « (juste déballé) », « Jeu neuf ».\n    const etat = /Jeu\\s+neuf/i.test(art) ? 'neuf'\n      : ((art.match(/\\(état ([^)]+)\\)/) || art.match(/Jeu\\s+d'occasion[^(<]*\\(([^)]+)\\)/) || [])[1] || '');\n    out.push({\n      vendeur: nettoie(vendeur),\n      prix: Number(prix[1]) + Number(prix[2]) / 100,\n      url: lien ? 'https://www.okkazeo.com' + lien : null,\n      ville: loc ? nettoie(loc[1]) : null,\n      cp: loc ? loc[2] : null,\n      etat: etat ? nettoie(etat) : null,\n      envoi: /class=\"sticker envoi\"/.test(art), // « Envoi en France », « Envoi France et Europe »\n    });\n  }\n  return out;\n}\n\n// jeux : [{ titre, annonces: [...] }] (une entrée par jeu demandé et trouvé). Vendeurs qui ont au moins 2 jeux différents,\n// avec l'annonce la moins chère de chaque jeu. Tri : nombre de jeux, puis vendeur près de Paris (cps), puis total le plus bas.\nfunction matchVendeurs(jeux, cps, n = 10) {\n  const proches = new Set(cps || []);\n  const vendeurs = new Map();\n  for (const j of jeux || []) {\n    for (const a of j.annonces || []) {\n      const k = String(a.vendeur || '').trim().toLowerCase();\n      if (!k) continue;\n      const v = vendeurs.get(k) || { vendeur: a.vendeur, ville: a.ville, cp: a.cp, jeux: new Map() };\n      const prev = v.jeux.get(j.titre);\n      if (!prev || a.prix < prev.prix) v.jeux.set(j.titre, { jeu: j.titre, ...a });\n      if (!v.cp && a.cp) { v.ville = a.ville; v.cp = a.cp; }\n      vendeurs.set(k, v);\n    }\n  }\n  return [...vendeurs.values()]\n    .filter(v => v.jeux.size >= 2)\n    .map(v => {\n      const annonces = [...v.jeux.values()].sort((a, b) => a.prix - b.prix);\n      return {\n        vendeur: v.vendeur, ville: v.ville, cp: v.cp,\n        procheParis: !!(v.cp && proches.has(v.cp)),\n        envoi: annonces.every(a => a.envoi),\n        nbJeux: annonces.length,\n        total: Math.round(annonces.reduce((s, a) => s + a.prix, 0) * 100) / 100,\n        annonces: annonces.map(a => ({ jeu: a.jeu, prix: a.prix, etat: a.etat, url: a.url })),\n      };\n    })\n    .sort((a, b) => b.nbJeux - a.nbJeux || Number(b.procheParis) - Number(a.procheParis) || a.total - b.total)\n    .slice(0, n);\n}\n\n// « Clank, Abyss » ou une liste par ligne → noms uniques (8 au plus : chaque jeu coûte 2 à 4 requêtes Okkazeo).\nfunction parseListeJeux(brut, max = 8) {\n  const vus = new Set();\n  return String(brut || '').split(/[|\\n;,]+/).map(s => s.trim()).filter(s => {\n    const k = s.toLowerCase();\n    if (!s || vus.has(k)) return false;\n    vus.add(k);\n    return true;\n  }).slice(0, max);\n}\n\nif (typeof module !== 'undefined' && module.exports) {\n  module.exports = { parseAnnoncesArticles, matchVendeurs, parseListeJeux };\n}\n\n\nconst CP_PARIS = [\"75001\",\"75002\",\"75003\",\"75004\",\"75005\",\"75006\",\"75007\",\"75008\",\"75009\",\"75010\",\"75011\",\"75012\",\"75013\",\"75014\",\"75015\",\"75016\",\"75017\",\"75018\",\"75019\",\"75020\",\"75116\",\"92100\",\"92110\",\"92120\",\"92130\",\"92140\",\"92160\",\"92170\",\"92200\",\"92220\",\"92240\",\"92260\",\"92290\",\"92300\",\"92320\",\"92330\",\"92340\",\"92350\",\"93100\",\"93130\",\"93170\",\"93230\",\"93260\",\"93300\",\"93310\",\"93400\",\"93500\",\"94000\",\"94100\",\"94110\",\"94120\",\"94130\",\"94140\",\"94150\",\"94160\",\"94200\",\"94210\",\"94220\",\"94230\",\"94240\",\"94250\",\"94260\",\"94270\",\"94300\",\"94310\",\"94320\",\"94340\",\"94400\",\"94410\",\"94550\",\"94600\",\"94700\",\"94800\"];\n\n// ---- n8n/code/panier.body.js\n// Matchmaking Okkazeo : GET ?jeux=Clank|Abyss|… → vendeurs qui proposent au moins 2 de ces jeux (voir lib/panier.js).\nconst noms = parseListeJeux($('Webhook').first().json.query.jeux);\nif (noms.length < 2) return [{ json: { jeux: noms.map(demande => ({ demande, titre: null, url: null, annonces: 0 })), vendeurs: [], erreurs: ['au moins 2 jeux'] } }];\n\n// Okkazeo refuse (403) le User-Agent seul : il faut les en-têtes d'un vrai navigateur (mêmes en-têtes que le node Sources).\nconst BROWSER = {\n  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36',\n  'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',\n  'Accept-Language': 'fr-FR,fr;q=0.9',\n  'Sec-Fetch-Dest': 'document', 'Sec-Fetch-Mode': 'navigate', 'Sec-Fetch-Site': 'none', 'Sec-Fetch-User': '?1',\n  'Upgrade-Insecure-Requests': '1',\n  'sec-ch-ua': '\"Chromium\";v=\"130\", \"Google Chrome\";v=\"130\", \"Not?A_Brand\";v=\"99\"',\n  'sec-ch-ua-mobile': '?0', 'sec-ch-ua-platform': '\"Windows\"',\n  'Accept-Encoding': 'gzip, deflate, br', 'Referer': 'https://www.google.com/',\n};\nconst get = async url => {\n  const r = await this.helpers.httpRequest({ url, headers: BROWSER, json: false, timeout: 10000, returnFullResponse: true, ignoreHttpStatusErrors: true });\n  if (r.statusCode >= 400) throw new Error(`HTTP ${r.statusCode} ${url}`);\n  return String(r.body ?? '');\n};\n\n// Un jeu : recherche Okkazeo (titre exact), puis les annonces de ses éditions qui en ont (3 au plus, comme le node Sources).\nasync function unJeu(nom) {\n  const recherche = 'https://www.okkazeo.com/jeux/resultats?rech_nom=' + encodeURIComponent(nom);\n  const search = await get(recherche);\n  if (!/Nous avons trouvé|Aucun jeu ne correspond/.test(search)) throw new Error('page de recherche inattendue');\n  const cands = parseOkkazeoSearch(search);\n  const p = pickProduct(nom, cands);\n  if (!p) return { demande: nom, titre: null, url: recherche, annonces: [] };\n  const editions = cands.filter(c => normalize(c.title) === normalize(p.title) && c.annonces !== 0).slice(0, 3);\n  const pages = await Promise.all(editions.map(e => get(e.url)));\n  return { demande: nom, titre: p.title, url: editions.length === 1 ? editions[0].url : recherche, annonces: pages.flatMap(parseAnnoncesArticles) };\n}\n\n// 3 jeux à la fois pour ne pas inonder Okkazeo.\nconst res = [];\nfor (let i = 0; i < noms.length; i += 3) res.push(...await Promise.allSettled(noms.slice(i, i + 3).map(unJeu)));\nconst msg = r => (r.reason && r.reason.message) || String(r.reason);\nconst jeux = res.map((r, i) => (r.status === 'fulfilled' ? r.value : { demande: noms[i], titre: null, url: null, annonces: [], erreur: msg(r) }));\nconst vendeurs = matchVendeurs(jeux.filter(j => j.titre), CP_PARIS);\nconst erreurs = jeux.filter(j => j.erreur).map(j => `${j.demande}: ${j.erreur}`);\nreturn [{ json: { jeux: jeux.map(j => ({ demande: j.demande, titre: j.titre, url: j.url, annonces: j.annonces.length })), vendeurs, erreurs } }];"
+      }
+    },
+    {
+      "id": "b1c2d3e4-0003-4a00-9000-000000000003",
+      "name": "Respond JSON",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        520,
+        0
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              }
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Panier",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Panier": {
+      "main": [
+        [
+          {
+            "node": "Respond JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  }
+}
