@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
-const { parseMyludoSearch, pickMyludo, parseMyludoGame, parseMyludoInfo, topMecaniques, pickSimilaires } = require('../lib/myludo.js');
+const { parseMyludoSearch, pickMyludo, parseMyludoGame, parseMyludoInfo, topMecaniques, pickSimilaires, pickAuteurJeux } = require('../lib/myludo.js');
 const fx = n => JSON.parse(fs.readFileSync(`${__dirname}/fixtures/${n}`, 'utf8'));
 
 test('recherche : candidats avec titre, id, type et lien', () => {
@@ -47,8 +47,8 @@ test('info : Abyss → Enchères, Gestion de main, Stop ou encore…', () => {
   for (const n of ['Enchères', 'Gestion de main', 'Stop ou encore']) assert.ok(noms.includes(n), n);
 });
 test('info vide ou absente → listes vides, pas de crash', () => {
-  assert.deepEqual(parseMyludoInfo({}), { mecaniques: [], themes: [] });
-  assert.deepEqual(parseMyludoInfo(null), { mecaniques: [], themes: [] });
+  assert.deepEqual(parseMyludoInfo({}), { mecaniques: [], themes: [], auteurs: [] });
+  assert.deepEqual(parseMyludoInfo(null), { mecaniques: [], themes: [], auteurs: [] });
 });
 const clankTags = () => {
   const tags = fx('myludo-tags-clank.json');
@@ -74,4 +74,31 @@ test('semblables : ne garde que les jeux partageant au moins 2 mécaniques', () 
 });
 test('semblables : listes vides → tableau vide', () => {
   assert.deepEqual(pickSimilaires('X', []), []);
+});
+test('info : auteurs (rôle « Auteur » seulement, dans l’ordre)', () => {
+  assert.deepEqual(parseMyludoInfo(fx('myludo-info-clank.json')).auteurs, [{ id: '11451', nom: 'Paul Dennen' }]);
+  assert.deepEqual(parseMyludoInfo(fx('myludo-info-abyss.json')).auteurs.map(a => a.nom), ['Bruno Cathala', 'Charles Chevallier']);
+});
+const dennen = () => fx('myludo-auteur-dennen.json').list;
+test('même auteur : sans le jeu ni sa gamme (Clank! ne propose pas Clank! Legacy), jeux de base seulement', () => {
+  const j = pickAuteurJeux('Clank!', dennen());
+  assert.ok(j.length > 0 && j.every(x => !/^clank/i.test(x.titre)), JSON.stringify(j.map(x => x.titre)));
+  assert.ok(j.every(x => x.id && x.url.startsWith('https://www.myludo.fr/#!/game/')));
+});
+test('même auteur : un titre une fois (édition la plus récente), les plus réédités d’abord', () => {
+  const j = pickAuteurJeux('Clank!', dennen());
+  assert.deepEqual(j.map(x => [x.titre, x.annee]).slice(0, 2).sort(), [['Dune Imperium', 2021], ['Wild Tiled West', 2024]]);
+  assert.equal(new Set(j.map(x => x.titre)).size, j.length);
+  assert.equal(j.length, 4);
+});
+test('même auteur : à éditions égales, ceux déjà populaires dans les mécaniques passent devant', () => {
+  const j = pickAuteurJeux('Clank!', dennen(), new Set(['eternal']));
+  assert.equal(j.find(x => x.titre === 'Eternal') && j.findIndex(x => x.titre === 'Eternal'), 2); // devant Lightning Train, après les 2 titres à 2 éditions
+  assert.equal(j[3].titre, 'Lightning Train');
+});
+test('même auteur : au plus 7 jeux, liste vide acceptée', () => {
+  const fake = Array.from({ length: 12 }, (_, i) => ({ id: String(i), code: 'c', title: 'Jeu ' + String.fromCharCode(65 + i), type: 'basegame', edition: 2000 + i }));
+  assert.equal(pickAuteurJeux('X', fake).length, 7);
+  assert.deepEqual(pickAuteurJeux('X', []), []);
+  assert.deepEqual(pickAuteurJeux('X', null), []);
 });

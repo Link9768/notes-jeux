@@ -39,3 +39,10 @@
 - Jeux d'un tag (le clic sur un tag du site) : `GET /views/theme/datas.php?type=games&id=<idTag>&order=<tri>&filter=basegame&limit=100` → `count` (nombre de jeux) + `list[]` (18 par défaut, 100 max testé). Tri utile : `byrankdesc` (classement MyLudo). `byrating*`, `bynote*`, `bycollected*`… ne trient pas. Sans `order` : alphabétique. `filter=basegame` retire extensions et goodies (deck building : 2 983 → 841).
 - Les éléments de `list` n'ont **pas** de note : une requête `type=game` par jeu pour l'afficher.
 - `type=game&raw=1` renvoie une réponse vide (réservé aux comptes connectés). `type=tags|similar|related|themes…` sur `game/datas.php` → `[]`.
+
+## Auteur, BGA, BGG (vérifié le 2026-10-24)
+- `game/datas.php?type=info` → `people` = { nom: { id, code, title, roles: ["Auteur"|"Illustrateur"|"Éditeur"|"Distributeur"] } }.
+- `people/datas.php?type=games&id=<id>&filter=basegame&limit=100&page=<n>` : tous les jeux liés à la personne (tous rôles). `family` ne filtre pas ; `order` ne gère que `bytitle`, `bydatedesc`, `byeditiondesc` (pas de tri par rang, note ni collections). Chaque édition/traduction est une entrée distincte. La recherche par mots (`words=<auteur>`) n'est pas fiable pour trouver les jeux d'un auteur.
+- Fiche d'un jeu (`type=game`) : `collected` (nombre de collections), `wishes`, `plays`. Latence ≈ 1 s si non mise en cache, requêtes traitées l'une après l'autre.
+- BGA : `https://boardgamearena.com/gamelist?section=all` (redirige vers `en.boardgamearena.com`, 1,9 Mo) embarque `game_list` : `name` (slug), `display_name_en`, `status` (public/beta), `aliases`, `bgg_id`. Partie : `https://boardgamearena.com/gamepanel?game=<name>`.
+- Okkazeo : la fiche d'un jeu contient `<a href="https://boardgamegeek.com/boardgame/<id>/<slug>">BoardGameGeek</a>` (Clank! → 201808).

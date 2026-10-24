@@ -47,6 +47,10 @@ Spec : `../docs/2026-10-13_notes-jeux-dashboard-design.md` · Plan : `../docs/20
 
 La recherche par nom de BGG exige un token qu'on n'a pas (`api.geekdo.com/xmlapi2` → 401, `boardgamegeek.com` → Cloudflare 403). La page n'affiche plus de tuile BGG ; MyLudo la remplace (voir plus bas). Les nodes BGG du workflow restent en place mais renvoient `null` (`bgg` n'est plus lu par le front).
 
+**Lien direct vers la page BGG** (sans token) : la fiche Okkazeo du jeu contient un lien `boardgamegeek.com/boardgame/<id>/<slug>` (node Sources → `bggUrl`). Repli : l'identifiant BGG de la liste BGA (`lib/bga-games.json`). Sinon, lien de recherche BGG. Okkazeo ne cherche que le titre exact : « catane » n'y trouve rien, donc pas de lien direct.
+
+**Board Game Arena** : la page charge `lib/bga-games.json` (même site GitHub Pages) et fait la correspondance dans le navigateur (`findBga` dans `index.html` : titre exact, puis à une lettre près, alias de 5 lettres et plus ; titres testés = la recherche et le titre MyLudo). pastille « BGA ✓ » cliquable (`gamepanel?game=<slug>`) à côté du nombre de joueurs si le jeu y est, « BGA » avec coche barrée sinon, rien si la liste est injoignable (ouverture en `file://`). La liste vient de la page `boardgamearena.com/gamelist` (`game_list`) : `node scripts/build-bga-list.mjs` la régénère (1 146 jeux publics le 2026-10-24), puis commit + push. Les titres français ne correspondent que si MyLudo donne le titre anglais ou si BGA a l'alias.
+
 ## Sécurité
 
 Le webhook est public et déclenche environ 8 requêtes vers des sites tiers par appel (2 par boutique + 2 BGG) : acceptable pour un usage perso. Si besoin, ajouter une clé simple dans l'URL et la vérifier dans un node du workflow.
@@ -58,7 +62,8 @@ API interne non officielle, 3 requêtes de base (accueil → jeton CSRF + cookie
 - **Note** : `rating.game.note` (sur 10). **Infos** : `players`, `age`, `time_min/max`, `rating.complexity.note` (sur 5).
 - **Style de jeu** : `game/datas.php?type=info` → `themes.mecanisme` (+ `themes.theme`). On affiche les 5 mécaniques les plus **rares** (comptage `count` du tag, jeux de base seulement), pas les plus courantes.
 - **Semblable à** : pour chaque mécanique, `theme/datas.php?type=games&id=<tag>&order=byrankdesc&filter=basegame&limit=100` (les 100 mieux classés). Score = nombre de mécaniques partagées, pondéré par `1/√count` (une mécanique rare pèse plus). Exclus : le jeu, sa gamme (titre commençant par le sien), doublons d'éditions, non-jeux de base. Il faut ≥ 2 mécaniques en commun. 3 jeux, avec leur note (1 requête fiche chacun).
-- Coût : ~14 requêtes MyLudo par recherche (≤ 10 mécaniques). Mécaniques/semblables en panne → `null` (« indisponible »), la note reste.
+- **Du même auteur** : premier `people` au rôle « Auteur » de `type=info`, puis `people/datas.php?type=games&id=<id>&filter=basegame&limit=100&order=bytitle&page=1..3`. Cette liste n'est triable que par titre/date : pas de tri par notoriété. On classe par **nombre d'éditions** du titre (jeux les plus réédités), puis ceux déjà dans le top 100 d'une mécanique du jeu ; 7 jeux max, sans le jeu ni sa gamme, sans note. Ne **pas** lire les fiches des jeux de l'auteur : ~1 s chacune côté MyLudo, non parallélisable (40 fiches = 14 s mesurés). Heuristique : bonne pour Bauza (Hanabi, Tokaido, Takenoko), moyenne pour un auteur très prolifique (Cathala).
+- Coût : ~14 requêtes MyLudo par recherche (≤ 10 mécaniques) + 1 à 3 pages de l'auteur. Une fiche MyLudo non mise en cache coûte ~1 s : les 3 notes des semblables font l'essentiel du temps (3–4 s au total). Mécaniques/semblables en panne → `null` (« indisponible »), la note reste.
 - Mécaniques en **français** (MyLudo) : pas les libellés BGG (« Push Your Luck »).
 - Limites vues en production : les « semblables » restent approximatifs (Abyss → Râ pertinent, les deux autres moins) ; MyLudo liste des jeux datés dans le futur (2027) ; `rating.game` peut être vide pour un jeu récent (Drillers).
 - Fixtures : `tests/fixtures/myludo-info-*.json` et `myludo-tags-clank.json` (listes allégées à id/code/title/edition/type).

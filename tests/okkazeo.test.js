@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
-const { htmlToLines, parseAnnonces, filterParis } = require('../lib/okkazeo.js');
+const { htmlToLines, parseAnnonces, filterParis, parseBggLink } = require('../lib/okkazeo.js');
 const { extractJsonLd, findProduct, offersOf } = require('../lib/jsonld.js');
 const lines = fs.readFileSync(__dirname + '/fixtures/okkazeo-listing.txt', 'utf8').split('\n').map(s => s.trim()).filter(Boolean);
 
@@ -45,4 +45,10 @@ test('états atypiques et annonce étrangère (cas vus sur la vraie page)', () =
 test('jeu neuf : état « neuf »', () => {
   const a = parseAnnonces(['Jeu neuf (sous cello.)', '41€ 10', 'Vendu par x', 'Maisons-laffitte (78600)', '12/06/2026']);
   assert.deepEqual([a[0].etat, a[0].prix], ['neuf', 41.1]);
+});
+
+test('lien BGG lu dans la fiche Okkazeo', () => {
+  assert.equal(parseBggLink(fs.readFileSync(__dirname + '/fixtures/okkazeo-clank.html', 'utf8')), 'https://boardgamegeek.com/boardgame/201808/clank-deck-building-adventure');
+  assert.equal(parseBggLink('<html>rien</html>'), null);
+  assert.equal(parseBggLink(null), null);
 });

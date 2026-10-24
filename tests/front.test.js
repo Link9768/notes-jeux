@@ -7,7 +7,7 @@ const vm = require('node:vm');
 const html = fs.readFileSync(`${__dirname}/../index.html`, 'utf8');
 const script = html.match(/<script>([\s\S]*?)<\/script>/)[1];
 const el = () => ({ addEventListener() {}, value: '', innerHTML: '' });
-const front = vm.runInNewContext(`${script}; ({ okk, tile, fr, myludo })`, {
+const front = vm.runInNewContext(`${script}; ({ okk, tile, fr, myludo, liens, findBga, bgaBadge })`, {
   document: { querySelector: el }, location: { search: '' }, history: {}, fetch: async () => { throw new Error('pas de réseau'); }, URLSearchParams,
 });
 
@@ -51,4 +51,55 @@ test('encart MyLudo : source nulle → indisponible ; mécaniques null → indis
 });
 test('encart MyLudo : texte venant du site échappé', () => {
   assert.ok(!front.myludo(ml({ mecaniques: ['<img src=x onerror=alert(1)>'] }), '#').includes('<img src=x'));
+});
+test('semblables : bouton 🔍 portant le titre (échappé) pour relancer la recherche', () => {
+  const h = front.myludo(ml({ similaires: [{ titre: "L'Île \"X\"", annee: 2019, url: 'u', note: 8 }] }), '#');
+  assert.ok(h.includes('class="go"') && h.includes('data-q="L&#39;Île &quot;X&quot;"'), h);
+});
+
+const games = require('../lib/bga-games.json');
+const lien = over => ({ query: 'abyss', myludo: { titre: 'Abyss' }, bggUrl: 'https://boardgamegeek.com/boardgame/361214/order-overload-cafe', liens: { bgg: 'https://boardgamegeek.com/geeksearch.php?q=x' }, ...over });
+test('BGA : Abyss jouable, lien de la partie ; casse et accents ignorés', () => {
+  assert.deepEqual(JSON.parse(JSON.stringify(front.findBga(['abyss'], games))), { nom: 'Abyss', url: 'https://boardgamearena.com/gamepanel?game=abyss', bggId: 155987 });
+  assert.ok(front.findBga(['7 Wonders DUEL'], games).url.endsWith('game=sevenwondersduel'));
+  assert.ok(front.findBga(['Terraforming Mars'], games).url.endsWith('game=terraformingmars')); // pas la variante « dice game »
+});
+test('BGA : à une lettre près (« catane »), alias long, titre MyLudo en second recours', () => {
+  assert.ok(front.findBga(['catane'], games).url.endsWith('game=catan'));
+  assert.ok(front.findBga(['Les Colons de Catane'], games).url.endsWith('game=catan'));
+  assert.ok(front.findBga(['clic', 'Abyss'], games).url.endsWith('game=abyss'));
+});
+test('BGA : Clank! absent, pas de correspondance « contient », alias court ignoré, liste absente → null', () => {
+  assert.equal(front.findBga(['clank', 'Clank!'], games), null);
+  assert.equal(front.findBga(['dune'], games), null);
+  assert.equal(front.findBga(['TTR'], games), null);
+  assert.equal(front.findBga(['abyss'], null), null);
+  assert.equal(front.findBga([], games), null);
+});
+test('liens : page BGG directe', () => {
+  const h = front.liens(lien(), games);
+  assert.ok(h.includes('href="https://boardgamegeek.com/boardgame/361214/order-overload-cafe"') && h.includes('BoardGameGeek ↗'));
+  assert.ok(!h.includes('Board Game Arena')); // la pastille BGA est à côté du nombre de joueurs, plus dans cette bande
+});
+test('liens : sans lien Okkazeo, repli par l’identifiant BGA ; sinon recherche BGG', () => {
+  assert.ok(front.liens(lien({ bggUrl: null }), games).includes('href="https://boardgamegeek.com/boardgame/155987"'));
+  const h = front.liens(lien({ bggUrl: null, query: 'clank', myludo: { titre: 'Clank!' } }), games);
+  assert.ok(h.includes('geeksearch.php?q=x') && h.includes('Chercher sur BoardGameGeek'));
+});
+test('pastille BGA : jeu jouable → « BGA ✓ » cliquable vers la page du jeu sur BGA', () => {
+  const h = front.bgaBadge(lien(), games);
+  assert.ok(h.includes('<a class="bga oui"') && h.includes('href="https://boardgamearena.com/gamepanel?game=abyss"') && h.includes('BGA ✓'));
+});
+test('pastille BGA : jeu absent → coche barrée sans lien ; liste injoignable → rien', () => {
+  const h = front.bgaBadge(lien({ query: 'clank', myludo: { titre: 'Clank!' } }), games);
+  assert.ok(h.includes('bga non') && h.includes('<s>✓</s>') && !h.includes('href') && !h.includes('boardgamearena.com'));
+  assert.equal(front.bgaBadge(lien(), null), '');
+});
+test('même auteur : section avec le nom de l\u2019auteur, notes et bouton 🔍', () => {
+  const h = front.myludo(ml({ memeAuteur: { nom: 'Paul Dennen', jeux: [{ titre: 'Dune Imperium', annee: 2021, url: 'https://www.myludo.fr/#!/game/dune-1', note: 8.4 }] } }), '#');
+  assert.ok(h.includes('Du même auteur · Paul Dennen') && h.includes('Dune Imperium') && h.includes('8,4') && h.includes('data-q="Dune Imperium"'));
+});
+test('même auteur : absent ou vide → pas de section', () => {
+  assert.ok(!front.myludo(ml({ memeAuteur: null }), '#').includes('Du même auteur'));
+  assert.ok(!front.myludo(ml({ memeAuteur: { nom: 'X', jeux: [] } }), '#').includes('Du même auteur'));
 });

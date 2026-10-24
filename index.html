@@ -38,6 +38,13 @@ a{color:var(--acc)}
 .chip.th{background:transparent;border:1px solid var(--line);color:var(--mut)}
 .sim{display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-top:1px solid var(--line)}
 .sim:first-of-type{border-top:0}
+.go{padding:2px 8px;margin-left:6px;border:1px solid var(--line);border-radius:8px;background:transparent;color:var(--mut);font-size:13px;line-height:1.4;cursor:pointer}
+.go:hover{color:var(--txt);border-color:var(--ml)}
+.liens{display:flex;flex-wrap:wrap;gap:8px 18px;margin-top:10px;padding:10px 12px;background:var(--card);border:1px solid var(--line);border-radius:12px;align-items:center}
+.bga{display:inline-block;font-size:11px;font-weight:700;padding:1px 7px;border-radius:10px;margin-left:6px;text-decoration:none;vertical-align:1px}
+.bga.oui{background:#34c75933;color:var(--ok)}
+.bga.oui:hover{background:#34c75966}
+.bga.non{background:var(--line);color:var(--mut)}
 .ml footer{padding:10px;text-align:center;border-top:1px solid var(--line)}
 .okk{border:2px solid var(--okk);border-radius:12px;overflow:hidden;align-self:start}
 .okk header{background:var(--okk);color:#fff;padding:10px 12px}
@@ -89,8 +96,55 @@ function myludo(m, lien) {
   const style = m.mecaniques === null || m.mecaniques === undefined
     ? '<div class="na">indisponible</div>'
     : `<div class="chips">${m.mecaniques.map(x => `<span class="chip">${esc(x)}</span>`).join('')}${(m.themes || []).map(x => `<span class="chip th">${esc(x)}</span>`).join('')}</div>`;
-  const sims = (m.similaires || []).map(s => `<div class="sim"><span>${ext(s.url, esc(s.titre))} <span class="mut">${s.annee ?? ''}</span></span><span>${s.note != null ? `<b>${fr(s.note)}</b><span class="mut">/10</span>` : ''}</span></div>`).join('');
-  return `<section class="ml"><header><b>MyLudo</b><span>${m.annee ? esc(m.annee) : ''}</span></header><div class="body"><div>${note}</div><div class="facts">${facts}</div><div><h3>Style de jeu</h3>${style}</div>${sims ? `<div><h3>Semblable à</h3>${sims}</div>` : ''}</div><footer>${ext(m.url, 'Ouvrir sur MyLudo ↗')}</footer></section>`;
+  const ligne = s => `<div class="sim"><span>${ext(s.url, esc(s.titre))} <span class="mut">${s.annee ?? ''}</span><button type="button" class="go" data-q="${esc(s.titre)}" title="Chercher ${esc(s.titre)}" aria-label="Chercher ${esc(s.titre)}">🔍</button></span><span>${s.note != null ? `<b>${fr(s.note)}</b><span class="mut">/10</span>` : ''}</span></div>`;
+  const sims = (m.similaires || []).map(ligne).join('');
+  const jeuxAuteur = m.memeAuteur && m.memeAuteur.jeux ? m.memeAuteur.jeux.map(ligne).join('') : '';
+  return `<section class="ml"><header><b>MyLudo</b><span>${m.annee ? esc(m.annee) : ''}</span></header><div class="body"><div>${note}</div><div class="facts">${facts}</div><div><h3>Style de jeu</h3>${style}</div>${sims ? `<div><h3>Semblable à</h3>${sims}</div>` : ''}${jeuxAuteur ? `<div><h3>Du même auteur · ${esc(m.memeAuteur.nom)}</h3>${jeuxAuteur}</div>` : ''}</div><footer>${ext(m.url, 'Ouvrir sur MyLudo ↗')}</footer></section>`;
+}
+
+// Board Game Arena : liste des jeux publics (lib/bga-games.json, régénérée par scripts/build-bga-list.mjs) chargée avec la page.
+// Entrée : [slug, titre anglais, bggId (0 si inconnu), ...alias]. null tant qu'elle n'est pas lue (ou si elle est injoignable).
+const BGA = fetch('lib/bga-games.json').then(r => (r.ok ? r.json() : null)).catch(() => null);
+const COMBINING = new RegExp('[' + String.fromCharCode(0x300) + '-' + String.fromCharCode(0x36f) + ']', 'g');
+const norm = s => String(s || '').normalize('NFD').replace(COMBINING, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+// Vrai si a et b sont égaux à une insertion, suppression ou substitution près.
+function within1(a, b) {
+  if (a === b) return true;
+  if (Math.abs(a.length - b.length) > 1) return false;
+  let i = 0;
+  while (i < a.length && i < b.length && a[i] === b[i]) i++;
+  if (a.length === b.length) return a.slice(i + 1) === b.slice(i + 1);
+  return a.length > b.length ? a.slice(i + 1) === b.slice(i) : b.slice(i + 1) === a.slice(i);
+}
+// Correspondance exacte, sinon à une lettre près (« catane » → CATAN). Pas de correspondance « contient » (« Dune » ≠ « Dune: Imperium »).
+// Alias de moins de 5 lettres (« TTR ») ignorés : trop ambigus.
+function findBga(titres, games) {
+  const keys = [...new Set((titres || []).map(norm).filter(Boolean))];
+  if (!keys.length || !games) return null;
+  const noms = g => [g[1], ...g.slice(3).filter(a => norm(a).length >= 5)].map(norm);
+  const pick = test => {
+    for (const k of keys) { const g = games.find(x => noms(x).some(n => test(n, k))); if (g) return g; }
+    return null;
+  };
+  const g = pick((n, k) => n === k) || pick((n, k) => k.length >= 5 && within1(n, k));
+  return g ? { nom: g[1], url: 'https://boardgamearena.com/gamepanel?game=' + g[0], bggId: g[2] || null } : null;
+}
+
+// Pastille Board Game Arena, à côté du nombre de joueurs : « BGA ✓ » cliquable (page du jeu sur BGA) ou « BGA ✓ » barré si le jeu n'y est pas.
+// Rien tant que la liste BGA n'est pas lue (ou injoignable).
+function bgaBadge(d, games) {
+  if (!games) return '';
+  const bga = findBga([d.query, d.myludo && d.myludo.titre], games);
+  return bga
+    ? `<a class="bga oui" href="${esc(bga.url)}" target="_blank" rel="noopener" title="Jouable sur Board Game Arena : ouvrir la page du jeu">BGA ✓</a>`
+    : '<span class="bga non" title="Pas sur Board Game Arena">BGA <s>✓</s></span>';
+}
+
+// Sous les encarts : page BoardGameGeek du jeu (lien direct si connu, repli par l'identifiant BGA, sinon recherche).
+function liens(d, games) {
+  const bga = findBga([d.query, d.myludo && d.myludo.titre], games);
+  const bggUrl = d.bggUrl || (bga && bga.bggId ? 'https://boardgamegeek.com/boardgame/' + bga.bggId : null);
+  return `<div class="liens">${bggUrl ? ext(bggUrl, 'BoardGameGeek ↗') : ext(d.liens.bgg, 'Chercher sur BoardGameGeek ↗')}</div>`;
 }
 
 function okk(o, lien) {
@@ -101,13 +155,13 @@ function okk(o, lien) {
   return `<section class="okk"><header><b>Okkazeo · ${o.annonces.length} près de Paris</b><div>${o.total} en France${prix}</div></header>${rows}<footer>${ext(o.url, pied)}</footer></section>`;
 }
 
-function render(d) {
+function render(d, games) {
   const m = d.myludo, L = d.liens;
   const head = m
-    ? `<div class="head">${m.image ? `<img src="${esc(m.image)}" alt="">` : ''}<div><h1>${esc(m.titre)}</h1><div class="mut">${[m.annee, m.joueurs && m.joueurs + ' joueurs', m.age].filter(Boolean).map(esc).join(' · ')}</div></div></div>`
-    : `<div class="head"><div><h1>${esc(d.query)}</h1></div></div>`;
+    ? `<div class="head">${m.image ? `<img src="${esc(m.image)}" alt="">` : ''}<div><h1>${esc(m.titre)}</h1><div class="mut">${[m.annee, m.joueurs && m.joueurs + ' joueurs', m.age].filter(Boolean).map(esc).join(' · ')}${bgaBadge(d, games)}</div></div></div>`
+    : `<div class="head"><div><h1>${esc(d.query)}</h1><div class="mut">${bgaBadge(d, games)}</div></div></div>`;
   const tiles = `<div class="tiles">${tile('Esprit Jeu', 'var(--ej)', d.espritjeu, 5, 'avis', L.espritjeu)}${tile('Philibert', 'var(--ph)', d.philibert, 5, 'avis', L.philibert)}</div>`;
-  $('#out').innerHTML = `<div class="layout"><div>${head}${tiles}${myludo(m, L.myludo || '#')}</div>${okk(d.okkazeo, L.okkazeo)}</div>`;
+  $('#out').innerHTML = `<div class="layout"><div>${head}${tiles}${myludo(m, L.myludo || '#')}${liens(d, games)}</div>${okk(d.okkazeo, L.okkazeo)}</div>`;
 }
 
 function skeleton() {
@@ -122,18 +176,29 @@ async function search(q) {
     const r = await fetch(API + '?q=' + encodeURIComponent(q));
     if (!r.ok) throw new Error('HTTP ' + r.status);
     const d = await r.json();
-    if (my === seq) render(d);
+    const games = await BGA;
+    if (my === seq) render(d, games);
   } catch (err) {
     if (my === seq) $('#out').innerHTML = `<p class="na">Recherche impossible (${esc(err.message)}). Réessaie dans un instant.</p>`;
   }
 }
 
-$('#f').addEventListener('submit', e => {
-  e.preventDefault();
-  const q = $('#q').value.trim();
+function lancer(q) {
   if (!q) return;
+  $('#q').value = q;
   history.replaceState(null, '', '?q=' + encodeURIComponent(q));
   search(q);
+}
+
+$('#f').addEventListener('submit', e => {
+  e.preventDefault();
+  lancer($('#q').value.trim());
+});
+
+// Raccourci 🔍 à côté d'un jeu semblable : lance la recherche de ce jeu sans retaper son nom.
+$('#out').addEventListener('click', e => {
+  const b = e.target.closest && e.target.closest('.go');
+  if (b) { lancer(b.dataset.q); scrollTo(0, 0); }
 });
 
 const initial = new URLSearchParams(location.search).get('q');

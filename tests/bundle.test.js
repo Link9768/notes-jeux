@@ -37,6 +37,7 @@ const myludoResp = o => {
   if (!ok) return { statusCode: 401, body: '{"success":false,"message":"Illegal action"}' };
   const json = n => JSON.parse(fs.readFileSync(`${__dirname}/fixtures/${n}`, 'utf8'));
   if (o.url.includes('/search/')) return { statusCode: 200, body: fs.readFileSync(`${__dirname}/fixtures/myludo-search-clank.json`, 'utf8') };
+  if (o.url.includes('/people/datas.php')) { const d = json('myludo-auteur-dennen.json'); return { statusCode: 200, body: { count: d.count, list: d.list } }; }
   if (o.url.includes('type=info')) return { statusCode: 200, body: json('myludo-info-clank.json') };
   if (o.url.includes('/theme/datas.php')) { const t = json('myludo-tags-clank.json')[/id=(\d+)/.exec(o.url)[1]]; return { statusCode: 200, body: { count: t.count, list: t.list } }; }
   const id = /id=(\d+)/.exec(o.url)[1];
@@ -95,6 +96,31 @@ test('sources : fiche détaillée MyLudo en panne → note conservée, mécaniqu
   const { out } = await run('sources', { nodes: sourcesNodes(), http: o => (o.url.includes('type=info') ? { statusCode: 500, body: '' } : myludoHttp()(o)) });
   assert.equal(out.myludo.note, 8.3);
   assert.deepEqual([out.myludo.mecaniques, out.myludo.similaires], [null, null]);
+});
+test('sources : jeux du même auteur (Paul Dennen), les plus réédités d’abord, sans lire leurs fiches', async () => {
+  const { out, calls } = await run('sources', { nodes: sourcesNodes(), http: myludoHttp() });
+  assert.equal(out.myludo.memeAuteur.nom, 'Paul Dennen');
+  const titres = out.myludo.memeAuteur.jeux.map(j => j.titre);
+  assert.deepEqual(titres.slice(0, 2).sort(), ['Dune Imperium', 'Wild Tiled West']);
+  assert.equal(titres.length, 4);
+  assert.ok(out.myludo.memeAuteur.jeux.every(j => j.url.includes('myludo.fr')));
+  assert.equal(calls.filter(c => c.url.includes('game/datas.php?type=game&')).length, 4); // le jeu + ses 3 semblables : aucune fiche lue pour l’auteur (≈ 1 s chacune)
+});
+test('sources : liste des jeux de l’auteur en panne → memeAuteur null, les semblables restent', async () => {
+  const { out } = await run('sources', { nodes: sourcesNodes(), http: o => (o.url.includes('/people/datas.php') ? { statusCode: 500, body: '' } : myludoHttp()(o)) });
+  assert.equal(out.myludo.memeAuteur, null);
+  assert.equal(out.myludo.similaires.length, 3);
+});
+test('sources : lien BGG direct lu dans la fiche Okkazeo', async () => {
+  const { out } = await run('sources', { nodes: sourcesNodes(), http: serve() });
+  assert.equal(out.bggUrl, 'https://boardgamegeek.com/boardgame/201808/clank-deck-building-adventure');
+});
+test('sources : jeu sans annonce Okkazeo → la fiche est quand même lue pour le lien BGG', async () => {
+  const sansAnnonce = fx('okkazeo-search-clank.html').replace(/<b>\s*\d+\s+annonces?\s*<\/b>/g, '<b>0 annonce</b>');
+  const { out, calls } = await run('sources', { nodes: sourcesNodes(), http: serve({ [OK_SEARCH]: { statusCode: 200, body: sansAnnonce } }) });
+  assert.equal(out.okkazeo.total, 0);
+  assert.equal(out.bggUrl, 'https://boardgamegeek.com/boardgame/201808/clank-deck-building-adventure');
+  assert.ok(calls.some(c => c.url === OK_PRODUCT));
 });
 test('sources : MyLudo en panne → null + erreur, le reste est servi', async () => {
   const { out } = await run('sources', { nodes: sourcesNodes(), http: myludoHttp({ [MYL + '/']: { statusCode: 403, body: '' } }) });

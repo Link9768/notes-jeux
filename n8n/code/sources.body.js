@@ -44,10 +44,13 @@ async function okkazeo() {
   if (!/Nous avons trouvé|Aucun jeu ne correspond/.test(search)) throw new Error('page de recherche inattendue');
   const cands = parseOkkazeoSearch(search);
   const p = pickProduct(q, cands);
-  const vide = { total: 0, min: null, max: null, url: p ? p.url : liens.okkazeo, annonces: [] };
+  const vide = { total: 0, min: null, max: null, url: p ? p.url : liens.okkazeo, annonces: [], bggUrl: null };
   if (!p) return vide;
   const editions = cands.filter(c => normalize(c.title) === normalize(p.title) && c.annonces !== 0).slice(0, 3);
-  if (!editions.length) return vide;
+  if (!editions.length) {
+    try { vide.bggUrl = parseBggLink(await get(p.url, BROWSER)); } catch (e) { /* lien BGG facultatif */ }
+    return vide;
+  }
   const pages = await Promise.all(editions.map(e => get(e.url, BROWSER)));
   const offres = pages.map(h => offersOf(findProduct(extractJsonLd(h))) || { total: 0, min: null, max: null });
   const prix = offres.flatMap(o => [o.min, o.max]).filter(x => x != null);
@@ -58,6 +61,7 @@ async function okkazeo() {
     max: prix.length ? Math.max(...prix) : null,
     url: editions.length > 1 ? liens.okkazeo : editions[0].url,
     parsees: toutes.length,
+    bggUrl: pages.map(parseBggLink).find(Boolean) || null,
     annonces: filterParis(toutes, CP_PARIS),
   };
 }
@@ -91,9 +95,22 @@ async function myludo() {
       try { const g = parseMyludoGame(await call('game/datas.php?type=game&id=' + encodeURIComponent(s.id))); return { ...s, note: g.note, avis: g.avis }; }
       catch (e) { return { ...s, note: null, avis: null }; }
     }));
-    return { ...fiche, mecaniques: topMecaniques(tagLists), themes: info.themes.slice(0, 3), similaires };
+    // Jeux du même auteur (le premier cité), sans lire leurs fiches (lent) : voir pickAuteurJeux. Facultatif.
+    let memeAuteur = null;
+    try {
+      const auteur = info.auteurs[0];
+      if (auteur) {
+        const page = n => call(`people/datas.php?type=games&id=${auteur.id}&filter=basegame&limit=100&order=bytitle&page=${n}`);
+        const p1 = await page(1);
+        const suites = await Promise.all(Array.from({ length: Math.min(3, Math.ceil((Number(p1.count) || 0) / 100)) - 1 }, (_, i) => page(i + 2)));
+        const liste = [p1, ...suites].flatMap(x => x.list || []);
+        const populaires = new Set(tagLists.flatMap(t => t.list.map(g => normalize(g.title))));
+        memeAuteur = { nom: auteur.nom, jeux: pickAuteurJeux(fiche.titre, liste, populaires) };
+      }
+    } catch (e) { memeAuteur = null; }
+    return { ...fiche, mecaniques: topMecaniques(tagLists), themes: info.themes.slice(0, 3), similaires, memeAuteur };
   } catch (e) {
-    return { ...fiche, mecaniques: null, themes: null, similaires: null };
+    return { ...fiche, mecaniques: null, themes: null, similaires: null, memeAuteur: null };
   }
 }
 
@@ -104,5 +121,7 @@ const [ej, ph, ok, ml] = await Promise.allSettled([
   myludo(),
 ]);
 const val = r => (r.status === 'fulfilled' ? r.value : null);
+// Lien direct vers la page BoardGameGeek, lu dans la fiche Okkazeo (null si inconnu : la page propose alors la recherche BGG).
+const bggUrl = (val(ok) || {}).bggUrl || null;
 const erreurs = [ej, ph, ok, ml].map((r, i) => r.status === 'rejected' ? `${['espritjeu', 'philibert', 'okkazeo', 'myludo'][i]}: ${(r.reason && r.reason.message) || String(r.reason)}` : null).filter(Boolean);
-return [{ json: { query: q, espritjeu: val(ej), philibert: val(ph), bgg, okkazeo: val(ok), myludo: val(ml), liens, erreurs } }];
+return [{ json: { query: q, espritjeu: val(ej), philibert: val(ph), bgg, okkazeo: val(ok), myludo: val(ml), bggUrl, liens, erreurs } }];
