@@ -40,8 +40,8 @@ test('vendeurs : aucun vendeur commun → liste vide ; envoi seulement si toutes
   assert.equal(v[0].envoi, false);
   assert.deepEqual(matchVendeurs([], CPS), []);
 });
-test('liste de jeux : virgules, retours à la ligne ou |, doublons et vides retirés, 8 au plus', () => {
+test('liste de jeux : virgules, retours à la ligne ou |, doublons et vides retirés, 15 au plus', () => {
   assert.deepEqual(parseListeJeux('Clank, Abyss\n\nclank|7 Wonders Duel ; '), ['Clank', 'Abyss', '7 Wonders Duel']);
-  assert.equal(parseListeJeux(Array.from({ length: 12 }, (_, i) => 'j' + i).join(',')).length, 8);
+  assert.equal(parseListeJeux(Array.from({ length: 20 }, (_, i) => 'j' + i).join(',')).length, 15);
   assert.deepEqual(parseListeJeux(undefined), []);
 });

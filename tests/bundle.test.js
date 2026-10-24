@@ -226,6 +226,15 @@ test('panier : un jeu en panne (403) → erreur pour ce jeu, les autres servent'
   assert.ok(out.erreurs[0].startsWith('dixit: odyssey:'), JSON.stringify(out.erreurs));
   assert.deepEqual(out.vendeurs, []);
 });
+test('panier et encart Okkazeo : rien au pluriel → nouvel essai au singulier (« clanks » → « clank »)', async () => {
+  const pluriel = 'https://www.okkazeo.com/jeux/resultats?rech_nom=clanks';
+  const vide = { statusCode: 200, body: fx('okkazeo-search-vide.html') };
+  const p = await run('panier', { nodes: panierNodes('clanks|dixit: odyssey'), http: o => (o.url === pluriel ? vide : panierHttp(o)) });
+  assert.equal(p.out.jeux[0].titre, 'Clank!');
+  assert.ok(p.calls.some(c => c.url === pluriel) && p.calls.some(c => c.url === OK_SEARCH));
+  const s = await run('sources', { nodes: sourcesNodes('clanks'), http: serve({ [pluriel]: vide }) });
+  assert.equal(s.out.okkazeo.total, 14);
+});
 test('panier : moins de 2 jeux → aucune requête', async () => {
   const { out, calls } = await run('panier', { nodes: panierNodes('clank'), http: panierHttp });
   assert.deepEqual(out.erreurs, ['au moins 2 jeux']);

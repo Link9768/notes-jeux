@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { normalize, isAccessory, pickProduct } = require('../lib/match.js');
+const { normalize, isAccessory, pickProduct, variantesRecherche } = require('../lib/match.js');
 
 const clank = [
   { title: 'Clank! Catacombes', url: 'catacombes', lang: 'fr' },
@@ -52,4 +52,18 @@ test('requête absurde → null', () => assert.equal(pickProduct('azertyuiop', c
 test('liste vide / requête vide → null', () => {
   assert.equal(pickProduct('clank', []), null);
   assert.equal(pickProduct('', clank), null);
+});
+test('pluriels ignorés mot par mot : « mots malins » → « Mot Malin »', () => {
+  const c = [{ title: 'Mot Malin - Extension' }, { title: 'Mot Malin' }, { title: 'Malin Mot de passe' }];
+  assert.equal(pickProduct('mots malins', c).title, 'Mot Malin');
+});
+test('faute de 2 lettres tolérée sur un titre long, pas sur un titre court', () => {
+  assert.equal(pickProduct('carcasonne duell', [{ title: 'Carcassonne Duel' }]).title, 'Carcassonne Duel');
+  assert.equal(pickProduct('azal', [{ title: 'Azul' }, { title: 'Azulx' }]), null);
+  assert.equal(pickProduct('dixxi', [{ title: 'Dixit' }]), null);
+});
+test('variantes de recherche : au singulier en second essai, rien si déjà au singulier', () => {
+  assert.deepEqual(variantesRecherche('Mots Malins'), ['Mots Malins', 'mot malin']);
+  assert.deepEqual(variantesRecherche('Clank'), ['Clank']);
+  assert.deepEqual(variantesRecherche('7 Wonders Duel'), ['7 Wonders Duel', '7 wonder duel']);
 });

@@ -40,10 +40,15 @@ async function boutique(searchUrl, parseSearch, charset) {
 
 // Okkazeo sépare un même jeu en plusieurs éditions (même titre, ids différents) : on additionne celles qui ont des annonces.
 async function okkazeo() {
-  const search = await get(liens.okkazeo, BROWSER);
-  if (!/Nous avons trouvé|Aucun jeu ne correspond/.test(search)) throw new Error('page de recherche inattendue');
-  const cands = parseOkkazeoSearch(search);
-  const p = pickProduct(q, cands);
+  let recherche = liens.okkazeo, cands = [], p = null;
+  for (const v of variantesRecherche(q)) { // telle quelle, puis au singulier si rien ne correspond (« mots malins »)
+    recherche = 'https://www.okkazeo.com/jeux/resultats?rech_nom=' + encodeURIComponent(v);
+    const search = await get(recherche, BROWSER);
+    if (!/Nous avons trouvé|Aucun jeu ne correspond/.test(search)) throw new Error('page de recherche inattendue');
+    cands = parseOkkazeoSearch(search);
+    p = pickProduct(q, cands);
+    if (p) break;
+  }
   const vide = { total: 0, min: null, max: null, url: p ? p.url : liens.okkazeo, annonces: [], bggUrl: null };
   if (!p) return vide;
   const editions = cands.filter(c => normalize(c.title) === normalize(p.title) && c.annonces !== 0).slice(0, 3);
@@ -59,7 +64,7 @@ async function okkazeo() {
     total: offres.reduce((s, o) => s + o.total, 0),
     min: prix.length ? Math.min(...prix) : null,
     max: prix.length ? Math.max(...prix) : null,
-    url: editions.length > 1 ? liens.okkazeo : editions[0].url,
+    url: editions.length > 1 ? recherche : editions[0].url,
     parsees: toutes.length,
     bggUrl: pages.map(parseBggLink).find(Boolean) || null,
     annonces: filterParis(toutes, CP_PARIS),

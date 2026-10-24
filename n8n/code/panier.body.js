@@ -21,11 +21,15 @@ const get = async url => {
 
 // Un jeu : recherche Okkazeo (titre exact), puis les annonces de ses éditions qui en ont (3 au plus, comme le node Sources).
 async function unJeu(nom) {
-  const recherche = 'https://www.okkazeo.com/jeux/resultats?rech_nom=' + encodeURIComponent(nom);
-  const search = await get(recherche);
-  if (!/Nous avons trouvé|Aucun jeu ne correspond/.test(search)) throw new Error('page de recherche inattendue');
-  const cands = parseOkkazeoSearch(search);
-  const p = pickProduct(nom, cands);
+  let recherche, cands = [], p = null;
+  for (const v of variantesRecherche(nom)) { // telle quelle, puis au singulier si rien ne correspond
+    recherche = 'https://www.okkazeo.com/jeux/resultats?rech_nom=' + encodeURIComponent(v);
+    const search = await get(recherche);
+    if (!/Nous avons trouvé|Aucun jeu ne correspond/.test(search)) throw new Error('page de recherche inattendue');
+    cands = parseOkkazeoSearch(search);
+    p = pickProduct(nom, cands);
+    if (p) break;
+  }
   if (!p) return { demande: nom, titre: null, url: recherche, annonces: [] };
   const editions = cands.filter(c => normalize(c.title) === normalize(p.title) && c.annonces !== 0).slice(0, 3);
   const pages = await Promise.all(editions.map(e => get(e.url)));
