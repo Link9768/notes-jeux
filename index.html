@@ -40,6 +40,10 @@ a{color:var(--acc)}
 .go{padding:2px 8px;margin-left:6px;border:1px solid var(--line);border-radius:8px;background:transparent;color:var(--mut);font-size:13px;line-height:1.4;cursor:pointer}
 .go:hover{color:var(--txt);border-color:var(--ml)}
 .liens{display:flex;flex-wrap:wrap;gap:8px 18px;margin-top:10px;padding:10px 12px;background:var(--card);border:1px solid var(--line);border-radius:12px;align-items:center}
+.onglets{display:flex;gap:6px;overflow-x:auto;margin-bottom:12px;padding-bottom:4px}
+.onglet{padding:7px 12px;border:1px solid var(--line);border-radius:999px;background:var(--card);color:var(--txt);font-size:13px;font-weight:600;white-space:nowrap;cursor:pointer}
+.onglet.on{background:var(--acc);border-color:var(--acc);color:#fff}
+.onglet.att{color:var(--mut)}
 .back{display:inline-flex;gap:6px;align-items:center;margin-bottom:12px;padding:8px 14px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--txt);font-size:14px;font-weight:600;cursor:pointer}
 .back:hover{border-color:var(--acc)}
 .aut{margin-top:14px;padding:12px;background:var(--card);border:1px solid var(--line);border-radius:12px}
@@ -78,7 +82,7 @@ a{color:var(--acc)}
 </head>
 <body>
 <main>
-  <form id="f"><input id="q" aria-label="Nom du jeu" placeholder="Nom du jeu (ex. Clank)" autocomplete="off" enterkeyhint="search"><button>Rechercher</button></form>
+  <form id="f"><input id="q" aria-label="Nom du jeu" placeholder="Un jeu, ou jusqu'à 8 séparés par des virgules" autocomplete="off" enterkeyhint="search"><button>Rechercher</button></form>
   <div id="out" aria-live="polite"></div>
   <section class="panier">
     <header><b>Matchmaking Okkazeo</b><span>vendeurs qui ont plusieurs jeux de ta liste</span></header>
@@ -195,12 +199,13 @@ function okk(o, lien) {
 }
 
 function render(d, games) {
+  affiche = d;
   const m = d.myludo, L = d.liens;
   const head = m
     ? `<div class="head">${m.image ? `<img src="${esc(m.image)}" alt="">` : ''}<div><h1>${esc(m.titre)}</h1><div class="mut">${[m.annee, m.joueurs && m.joueurs + ' joueurs', m.age].filter(Boolean).map(esc).join(' · ')}${bgaBadge(d, games)}</div></div></div>`
     : `<div class="head"><div><h1>${esc(d.query)}</h1><div class="mut">${bgaBadge(d, games)}</div></div></div>`;
   const tiles = `<div class="tiles">${tile('Esprit Jeu', 'var(--ej)', d.espritjeu, 5, 'avis', L.espritjeu)}${tile('Philibert', 'var(--ph)', d.philibert, 5, 'avis', L.philibert)}</div>`;
-  $('#out').innerHTML = `${retour()}${head}${tiles}${myludo(m, L.myludo || '#')}${liens(d, games)}${auteur(m)}${okk(d.okkazeo, L.okkazeo)}`;
+  $('#out').innerHTML = `${retour()}${ongletsHtml()}${head}${tiles}${myludo(m, L.myludo || '#')}${liens(d, games)}${auteur(m)}${okk(d.okkazeo, L.okkazeo)}`;
 }
 
 function skeleton() {
@@ -212,36 +217,76 @@ function skeleton() {
 // Résultats déjà chargés, réaffichés sans rechargement pendant 15 min (clé : la recherche en minuscules).
 const CACHE = new Map();
 const CACHE_MS = 15 * 60 * 1000;
+const ENCOURS = new Map(); // chargements en cours : un même jeu n'est demandé qu'une fois
+const ECHECS = new Set();
+const cleDe = q => q.trim().toLowerCase();
+const enCache = q => { const c = CACHE.get(cleDe(q)); return c && Date.now() - c.t < CACHE_MS ? c.d : null; };
+
+function charger(q) {
+  const cle = cleDe(q);
+  const d = enCache(q);
+  if (d) return Promise.resolve(d);
+  if (ENCOURS.has(cle)) return ENCOURS.get(cle);
+  ECHECS.delete(cle);
+  const p = fetch(API + '?q=' + encodeURIComponent(q))
+    .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+    .then(d => { CACHE.set(cle, { d, t: Date.now() }); return d; })
+    .catch(err => { ECHECS.add(cle); throw err; })
+    .finally(() => ENCOURS.delete(cle));
+  ENCOURS.set(cle, p);
+  return p;
+}
+
+// Recherche de plusieurs jeux (séparés par des virgules) : un onglet par jeu, tous chargés en parallèle,
+// navigation libre d'un onglet à l'autre sans rechargement.
+let onglets = [];
+let actif = -1;
+let affiche = null; // résultat affiché (null pendant un chargement)
+function ongletsHtml() {
+  if (onglets.length < 2) return '';
+  return `<nav class="onglets">${onglets.map((q, i) => {
+    const d = enCache(q);
+    const nom = (d && d.myludo && d.myludo.titre) || q;
+    const etat = d ? '' : ECHECS.has(cleDe(q)) ? ' ⚠' : ' …';
+    return `<button type="button" class="onglet${i === actif ? ' on' : ''}${d ? '' : ' att'}" data-i="${i}">${esc(nom)}${etat}</button>`;
+  }).join('')}</nav>`;
+}
+// Un onglet vient de finir de charger : on met à jour les étiquettes de la barre sans changer ce qui est affiché.
+async function majOnglets() {
+  const games = await BGA;
+  if (affiche) render(affiche, games);
+}
 
 async function search(q) {
   const my = ++seq;
-  const cle = q.trim().toLowerCase();
-  const c = CACHE.get(cle);
-  if (c && Date.now() - c.t < CACHE_MS) {
-    const games = await BGA;
-    if (my === seq) { courant = c.d; render(c.d, games); }
-    return;
-  }
-  $('#out').innerHTML = skeleton();
+  if (!enCache(q)) { affiche = null; $('#out').innerHTML = ongletsHtml() + skeleton(); }
   try {
-    const r = await fetch(API + '?q=' + encodeURIComponent(q));
-    if (!r.ok) throw new Error('HTTP ' + r.status);
-    const d = await r.json();
+    const d = await charger(q);
     const games = await BGA;
-    CACHE.set(cle, { d, t: Date.now() });
     if (my === seq) { courant = d; render(d, games); }
   } catch (err) {
-    if (my === seq) $('#out').innerHTML = `${retour()}<p class="na">Recherche impossible (${esc(err.message)}). Réessaie dans un instant.</p>`;
+    if (my === seq) { affiche = null; $('#out').innerHTML = `${retour()}${ongletsHtml()}<p class="na">Recherche impossible (${esc(err.message)}). Réessaie dans un instant.</p>`; }
   }
 }
 
-// garder : recherche lancée depuis un 🔍 → on mémorise l'écran actuel pour pouvoir y revenir ; sinon nouvelle recherche, pile vidée.
+// garder : recherche lancée depuis un 🔍 → on mémorise l'écran actuel pour pouvoir y revenir (les onglets restent) ;
+// sinon nouvelle recherche, pile vidée, et une liste « A, B, C » ouvre un onglet par jeu (8 au plus).
 function lancer(q, garder) {
   if (!q) return;
   if (garder && courant) pile.push(courant); else if (!garder) pile.length = 0;
-  $('#q').value = q;
-  history.replaceState(null, '', '?q=' + encodeURIComponent(q));
-  search(q);
+  if (garder) actif = -1;
+  else {
+    const vus = new Set();
+    onglets = q.split(/[,;]/).map(x => x.trim()).filter(x => x && !vus.has(cleDe(x)) && vus.add(cleDe(x))).slice(0, 8);
+    if (onglets.length < 2) onglets = [];
+    actif = onglets.length ? 0 : -1;
+  }
+  if (!garder) $('#q').value = q;
+  history.replaceState(null, '', '?q=' + encodeURIComponent(garder ? q : $('#q').value));
+  if (onglets.length && !garder) {
+    onglets.forEach(x => charger(x).then(majOnglets, majOnglets));
+    search(onglets[0]);
+  } else search(q);
 }
 
 $('#f').addEventListener('submit', e => {
@@ -253,6 +298,8 @@ $('#f').addEventListener('submit', e => {
 $('#out').addEventListener('click', e => {
   const b = e.target.closest && e.target.closest('.go');
   if (b) { lancer(b.dataset.q, true); scrollTo(0, 0); return; }
+  const o = e.target.closest && e.target.closest('.onglet');
+  if (o) { actif = Number(o.dataset.i); pile.length = 0; search(onglets[actif]); return; }
   if (e.target.closest && e.target.closest('.back')) revenir();
 });
 
@@ -261,8 +308,8 @@ async function revenir() {
   if (!prev) return;
   seq++; // annule une recherche encore en cours
   courant = prev;
-  $('#q').value = prev.query;
-  history.replaceState(null, '', '?q=' + encodeURIComponent(prev.query));
+  actif = onglets.findIndex(x => cleDe(x) === cleDe(prev.query));
+  if (!onglets.length) { $('#q').value = prev.query; history.replaceState(null, '', '?q=' + encodeURIComponent(prev.query)); }
   render(prev, await BGA);
   scrollTo(0, 0);
 }
@@ -295,7 +342,7 @@ $('#pf').addEventListener('submit', async e => {
 });
 
 const initial = new URLSearchParams(location.search).get('q');
-if (initial) { $('#q').value = initial; search(initial.trim()); }
+if (initial) lancer(initial.trim());
 </script>
 </body>
 </html>

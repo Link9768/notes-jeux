@@ -143,3 +143,40 @@ test('cache : un jeu déjà chargé se réaffiche sans nouvel appel au webhook',
   assert.equal(appels, 1);
   assert.ok(out.innerHTML.includes('abyss'));
 });
+
+test('plusieurs jeux séparés par des virgules : un onglet par jeu, tous chargés en parallèle, navigation sans rechargement', async () => {
+  const appels = [];
+  const els = {};
+  const elx = sel => (els[sel] = els[sel] || { innerHTML: '', value: '', handlers: {}, addEventListener(t, h) { this.handlers[t] = h; } });
+  const ctx = {
+    document: { querySelector: elx }, location: { search: '' }, history: { replaceState() {} }, scrollTo() {}, URLSearchParams,
+    fetch: async u => {
+      const m = String(u).match(/webhook\/notes-jeux\?q=(.*)$/);
+      if (!m) return { ok: false };
+      const q = decodeURIComponent(m[1]);
+      appels.push(q);
+      return { ok: true, json: async () => ({ query: q, myludo: { titre: 'Titre ' + q }, liens: { bgg: '#' }, okkazeo: null }) };
+    },
+  };
+  const f = vm.runInNewContext(`${script}; ({ lancer })`, ctx);
+  f.lancer('abyss, Clank ; abyss, azul, a, b, c, d, e, f');
+  await new Promise(r => setTimeout(r, 20));
+  assert.deepEqual(appels.sort(), ['Clank', 'a', 'abyss', 'azul', 'b', 'c', 'd', 'e'].sort()); // doublon retiré, 8 au plus
+  const out = els['#out'];
+  assert.ok(out.innerHTML.includes('class="onglets"') && out.innerHTML.includes('Titre abyss') && out.innerHTML.includes('onglet on'));
+  const clic = i => out.handlers.click({ target: { closest: s => (s === '.onglet' ? { dataset: { i: String(i) } } : null) } });
+  clic(2);
+  await new Promise(r => setTimeout(r, 5));
+  assert.ok(out.innerHTML.includes('<h1>Titre azul</h1>'), 'onglet 3 affiché');
+  assert.equal(appels.length, 8); // aucun nouvel appel en changeant d'onglet
+});
+test('un seul jeu : pas de barre d’onglets', async () => {
+  const els = {};
+  const elx = sel => (els[sel] = els[sel] || { innerHTML: '', value: '', addEventListener() {} });
+  const ctx = { document: { querySelector: elx }, location: { search: '' }, history: { replaceState() {} }, URLSearchParams,
+    fetch: async u => (String(u).includes('/webhook/') ? { ok: true, json: async () => ({ query: 'abyss', myludo: null, liens: { bgg: '#' }, okkazeo: null }) } : { ok: false }) };
+  const f = vm.runInNewContext(`${script}; ({ lancer })`, ctx);
+  f.lancer('abyss');
+  await new Promise(r => setTimeout(r, 10));
+  assert.ok(!els['#out'].innerHTML.includes('class="onglets"'));
+});

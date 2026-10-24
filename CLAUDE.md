@@ -62,6 +62,8 @@ Case en bas de page : 2 à 8 jeux (un par ligne) → vendeurs Okkazeo qui en pro
 
 Les résultats déjà chargés sont gardés 15 min en mémoire de la page (clé : recherche en minuscules) : re-cliquer sur un jeu déjà vu ne rappelle pas le webhook. 🔍 sur un jeu (semblables, même auteur) empile l'écran courant ; « ← Retour à … » le réaffiche sans réseau.
 
+Plusieurs jeux dans la barre (« Abyss, Clank, Azul », virgule ou point-virgule, 8 max) : un onglet par jeu, tous chargés en parallèle (`charger` : un même jeu n'est demandé qu'une fois), puis navigation sans réseau. Étiquette = titre MyLudo une fois chargé, « … » pendant le chargement, « ⚠ » en cas d'échec (un clic relance).
+
 ## Sécurité
 
 Les webhooks sont publics. La recherche déclenche environ 8 requêtes vers des sites tiers par appel (2 par boutique + 2 BGG) : acceptable pour un usage perso. Si besoin, ajouter une clé simple dans l'URL et la vérifier dans un node du workflow.
