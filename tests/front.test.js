@@ -7,7 +7,7 @@ const vm = require('node:vm');
 const html = fs.readFileSync(`${__dirname}/../index.html`, 'utf8');
 const script = html.match(/<script>([\s\S]*?)<\/script>/)[1];
 const el = () => ({ addEventListener() {}, value: '', innerHTML: '' });
-const front = vm.runInNewContext(`${script}; ({ okk, tile, fr, myludo, liens, findBga, bgaBadge })`, {
+const front = vm.runInNewContext(`${script}; ({ okk, tile, fr, myludo, liens, findBga, bgaBadge, auteur, retour, pile })`, {
   document: { querySelector: el }, location: { search: '' }, history: {}, fetch: async () => { throw new Error('pas de réseau'); }, URLSearchParams,
 });
 
@@ -95,11 +95,25 @@ test('pastille BGA : jeu absent → coche barrée sans lien ; liste injoignable 
   assert.ok(h.includes('bga non') && h.includes('<s>✓</s>') && !h.includes('href') && !h.includes('boardgamearena.com'));
   assert.equal(front.bgaBadge(lien(), null), '');
 });
-test('même auteur : section avec le nom de l\u2019auteur, notes et bouton 🔍', () => {
-  const h = front.myludo(ml({ memeAuteur: { nom: 'Paul Dennen', jeux: [{ titre: 'Dune Imperium', annee: 2021, url: 'https://www.myludo.fr/#!/game/dune-1', note: 8.4 }] } }), '#');
-  assert.ok(h.includes('Du même auteur · Paul Dennen') && h.includes('Dune Imperium') && h.includes('8,4') && h.includes('data-q="Dune Imperium"'));
+const jeuxAuteur = { nom: 'Paul Dennen', jeux: [{ titre: 'Dune Imperium', annee: 2021, url: 'https://www.myludo.fr/#!/game/dune-1' }, { titre: 'Eternal', annee: 2019, url: 'https://www.myludo.fr/#!/game/eternal-2' }] };
+test('même auteur : encart à part (plus dans l’encart MyLudo), nom de l’auteur, jeux et bouton 🔍', () => {
+  const h = front.auteur(ml({ memeAuteur: jeuxAuteur }));
+  assert.ok(h.includes('class="aut"') && h.includes('Du même auteur · Paul Dennen') && h.includes('Dune Imperium') && h.includes('data-q="Eternal"'));
+  assert.ok(!front.myludo(ml({ memeAuteur: jeuxAuteur }), '#').includes('Du même auteur'));
 });
-test('même auteur : absent ou vide → pas de section', () => {
-  assert.ok(!front.myludo(ml({ memeAuteur: null }), '#').includes('Du même auteur'));
-  assert.ok(!front.myludo(ml({ memeAuteur: { nom: 'X', jeux: [] } }), '#').includes('Du même auteur'));
+test('même auteur : absent ou vide → pas d’encart', () => {
+  assert.equal(front.auteur(ml({ memeAuteur: null })), '');
+  assert.equal(front.auteur(ml({ memeAuteur: { nom: 'X', jeux: [] } })), '');
+  assert.equal(front.auteur(null), '');
+});
+test('bouton retour : absent sans historique, sinon « Retour à <jeu précédent> » (titre échappé)', () => {
+  front.pile.length = 0;
+  assert.equal(front.retour(), '');
+  front.pile.push({ query: 'clank', myludo: { titre: '<b>Clank!</b>' } });
+  const h = front.retour();
+  assert.ok(h.includes('class="back"') && h.includes('Retour à &lt;b&gt;Clank!&lt;/b&gt;') && !h.includes('<b>Clank'));
+  front.pile.length = 0;
+  front.pile.push({ query: 'abyss', myludo: null });
+  assert.ok(front.retour().includes('Retour à abyss'));
+  front.pile.length = 0;
 });

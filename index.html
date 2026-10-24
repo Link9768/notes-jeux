@@ -41,6 +41,12 @@ a{color:var(--acc)}
 .go{padding:2px 8px;margin-left:6px;border:1px solid var(--line);border-radius:8px;background:transparent;color:var(--mut);font-size:13px;line-height:1.4;cursor:pointer}
 .go:hover{color:var(--txt);border-color:var(--ml)}
 .liens{display:flex;flex-wrap:wrap;gap:8px 18px;margin-top:10px;padding:10px 12px;background:var(--card);border:1px solid var(--line);border-radius:12px;align-items:center}
+.back{display:inline-flex;gap:6px;align-items:center;margin-bottom:12px;padding:8px 14px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--txt);font-size:14px;font-weight:600;cursor:pointer}
+.back:hover{border-color:var(--acc)}
+.aut{margin-top:14px;padding:12px;background:var(--card);border:1px solid var(--line);border-radius:12px}
+.aut h3{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--mut);margin:0 0 6px;font-weight:600}
+.autjeux{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:0 24px}
+.aut .sim{border-top:0;border-bottom:1px solid var(--line)}
 .bga{display:inline-block;font-size:11px;font-weight:700;padding:1px 7px;border-radius:10px;margin-left:6px;text-decoration:none;vertical-align:1px}
 .bga.oui{background:#34c75933;color:var(--ok)}
 .bga.oui:hover{background:#34c75966}
@@ -88,6 +94,26 @@ function tile(name, color, d, scale, unit, searchUrl) {
   return `<div class="tile">${src}${val}<div class="match">« ${esc(d.titre)} » ${ext(d.url, '↗')}</div></div>`;
 }
 
+// Une ligne de jeu (semblable ou du même auteur) : lien MyLudo, année, bouton 🔍 qui lance sa recherche, note si connue.
+function ligneJeu(s) {
+  return `<div class="sim"><span>${ext(s.url, esc(s.titre))} <span class="mut">${s.annee ?? ''}</span><button type="button" class="go" data-q="${esc(s.titre)}" title="Chercher ${esc(s.titre)}" aria-label="Chercher ${esc(s.titre)}">🔍</button></span><span>${s.note != null ? `<b>${fr(s.note)}</b><span class="mut">/10</span>` : ''}</span></div>`;
+}
+
+// Encart tout en bas : les jeux les plus connus du même auteur (voir CLAUDE.md).
+function auteur(m) {
+  const a = m && m.memeAuteur;
+  if (!a || !a.jeux || !a.jeux.length) return '';
+  return `<section class="aut"><h3>Du même auteur · ${esc(a.nom)}</h3><div class="autjeux">${a.jeux.map(ligneJeu).join('')}</div></section>`;
+}
+
+// Retour à la recherche précédente (celle d'où on a cliqué sur un 🔍) : réaffichée depuis la mémoire, sans rechargement.
+const pile = [];
+let courant = null;
+function retour() {
+  const p = pile[pile.length - 1];
+  return p ? `<button type="button" class="back">← Retour à ${esc((p.myludo && p.myludo.titre) || p.query)}</button>` : '';
+}
+
 // Grand encart MyLudo : note de la communauté, infos pratiques, style de jeu (mécaniques) et jeux semblables.
 function myludo(m, lien) {
   if (!m) return `<section class="ml"><header><b>MyLudo</b><span>indisponible</span></header><footer>${ext(lien, 'Chercher sur MyLudo ↗')}</footer></section>`;
@@ -96,10 +122,8 @@ function myludo(m, lien) {
   const style = m.mecaniques === null || m.mecaniques === undefined
     ? '<div class="na">indisponible</div>'
     : `<div class="chips">${m.mecaniques.map(x => `<span class="chip">${esc(x)}</span>`).join('')}${(m.themes || []).map(x => `<span class="chip th">${esc(x)}</span>`).join('')}</div>`;
-  const ligne = s => `<div class="sim"><span>${ext(s.url, esc(s.titre))} <span class="mut">${s.annee ?? ''}</span><button type="button" class="go" data-q="${esc(s.titre)}" title="Chercher ${esc(s.titre)}" aria-label="Chercher ${esc(s.titre)}">🔍</button></span><span>${s.note != null ? `<b>${fr(s.note)}</b><span class="mut">/10</span>` : ''}</span></div>`;
-  const sims = (m.similaires || []).map(ligne).join('');
-  const jeuxAuteur = m.memeAuteur && m.memeAuteur.jeux ? m.memeAuteur.jeux.map(ligne).join('') : '';
-  return `<section class="ml"><header><b>MyLudo</b><span>${m.annee ? esc(m.annee) : ''}</span></header><div class="body"><div>${note}</div><div class="facts">${facts}</div><div><h3>Style de jeu</h3>${style}</div>${sims ? `<div><h3>Semblable à</h3>${sims}</div>` : ''}${jeuxAuteur ? `<div><h3>Du même auteur · ${esc(m.memeAuteur.nom)}</h3>${jeuxAuteur}</div>` : ''}</div><footer>${ext(m.url, 'Ouvrir sur MyLudo ↗')}</footer></section>`;
+  const sims = (m.similaires || []).map(ligneJeu).join('');
+  return `<section class="ml"><header><b>MyLudo</b><span>${m.annee ? esc(m.annee) : ''}</span></header><div class="body"><div>${note}</div><div class="facts">${facts}</div><div><h3>Style de jeu</h3>${style}</div>${sims ? `<div><h3>Semblable à</h3>${sims}</div>` : ''}</div><footer>${ext(m.url, 'Ouvrir sur MyLudo ↗')}</footer></section>`;
 }
 
 // Board Game Arena : liste des jeux publics (lib/bga-games.json, régénérée par scripts/build-bga-list.mjs) chargée avec la page.
@@ -161,7 +185,7 @@ function render(d, games) {
     ? `<div class="head">${m.image ? `<img src="${esc(m.image)}" alt="">` : ''}<div><h1>${esc(m.titre)}</h1><div class="mut">${[m.annee, m.joueurs && m.joueurs + ' joueurs', m.age].filter(Boolean).map(esc).join(' · ')}${bgaBadge(d, games)}</div></div></div>`
     : `<div class="head"><div><h1>${esc(d.query)}</h1><div class="mut">${bgaBadge(d, games)}</div></div></div>`;
   const tiles = `<div class="tiles">${tile('Esprit Jeu', 'var(--ej)', d.espritjeu, 5, 'avis', L.espritjeu)}${tile('Philibert', 'var(--ph)', d.philibert, 5, 'avis', L.philibert)}</div>`;
-  $('#out').innerHTML = `<div class="layout"><div>${head}${tiles}${myludo(m, L.myludo || '#')}${liens(d, games)}</div>${okk(d.okkazeo, L.okkazeo)}</div>`;
+  $('#out').innerHTML = `${retour()}<div class="layout"><div>${head}${tiles}${myludo(m, L.myludo || '#')}${liens(d, games)}</div>${okk(d.okkazeo, L.okkazeo)}</div>${auteur(m)}`;
 }
 
 function skeleton() {
@@ -177,14 +201,16 @@ async function search(q) {
     if (!r.ok) throw new Error('HTTP ' + r.status);
     const d = await r.json();
     const games = await BGA;
-    if (my === seq) render(d, games);
+    if (my === seq) { courant = d; render(d, games); }
   } catch (err) {
-    if (my === seq) $('#out').innerHTML = `<p class="na">Recherche impossible (${esc(err.message)}). Réessaie dans un instant.</p>`;
+    if (my === seq) $('#out').innerHTML = `${retour()}<p class="na">Recherche impossible (${esc(err.message)}). Réessaie dans un instant.</p>`;
   }
 }
 
-function lancer(q) {
+// garder : recherche lancée depuis un 🔍 → on mémorise l'écran actuel pour pouvoir y revenir ; sinon nouvelle recherche, pile vidée.
+function lancer(q, garder) {
   if (!q) return;
+  if (garder && courant) pile.push(courant); else if (!garder) pile.length = 0;
   $('#q').value = q;
   history.replaceState(null, '', '?q=' + encodeURIComponent(q));
   search(q);
@@ -198,8 +224,20 @@ $('#f').addEventListener('submit', e => {
 // Raccourci 🔍 à côté d'un jeu semblable : lance la recherche de ce jeu sans retaper son nom.
 $('#out').addEventListener('click', e => {
   const b = e.target.closest && e.target.closest('.go');
-  if (b) { lancer(b.dataset.q); scrollTo(0, 0); }
+  if (b) { lancer(b.dataset.q, true); scrollTo(0, 0); return; }
+  if (e.target.closest && e.target.closest('.back')) revenir();
 });
+
+async function revenir() {
+  const prev = pile.pop();
+  if (!prev) return;
+  seq++; // annule une recherche encore en cours
+  courant = prev;
+  $('#q').value = prev.query;
+  history.replaceState(null, '', '?q=' + encodeURIComponent(prev.query));
+  render(prev, await BGA);
+  scrollTo(0, 0);
+}
 
 const initial = new URLSearchParams(location.search).get('q');
 if (initial) { $('#q').value = initial; search(initial.trim()); }
