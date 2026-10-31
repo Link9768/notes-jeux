@@ -180,3 +180,8 @@ test('un seul jeu : pas de barre d’onglets', async () => {
   await new Promise(r => setTimeout(r, 10));
   assert.ok(!els['#out'].innerHTML.includes('class="onglets"'));
 });
+
+test('liens : la page BGG vient de la fiche BGG en priorité (token BGG), puis d’Okkazeo', () => {
+  const h = front.liens(lien({ bgg: { url: 'https://boardgamegeek.com/boardgame/155987' }, bggUrl: 'https://boardgamegeek.com/boardgame/1/autre' }), games);
+  assert.ok(h.includes('href="https://boardgamegeek.com/boardgame/155987"') && !h.includes('/autre'));
+});

@@ -1,5 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
 const { parseBggSearch, bggCandidates, parseBggThings, pickBgg } = require('../lib/bgg.js');
 
 // XML au format officiel xmlapi2 (déduit : fixtures réelles à ajouter quand le token BGG existe)
@@ -16,7 +17,7 @@ const thing = `<items>
 </items>`;
 
 test('search', () => assert.deepEqual(parseBggSearch(search)[1], { id: '201809', type: 'boardgame', name: 'Clank!' }));
-test('candidats : nom exact (alternate inclus)', () => assert.deepEqual(bggCandidates('clank', parseBggSearch(search)), ['201809']));
+test('candidats : nom exact (alternate inclus), puis jeu dont le nom de base est la recherche', () => assert.deepEqual(bggCandidates('clank', parseBggSearch(search)), ['201809', '201808']));
 test('candidats : sinon tous les mots', () => assert.deepEqual(bggCandidates('clank sunken', parseBggSearch(search)), ['231000']));
 test('candidats : rien → []', () => assert.deepEqual(bggCandidates('azertyuiop', parseBggSearch(search)), []));
 test('fiche', () => {
@@ -48,4 +49,17 @@ test('valeurs 0 de BGG (= inconnu pour un jeu récent) → null, jamais « 0/10 
 test('entités XML décodées dans le titre', () => {
   const xml = '<items><item type="boardgame" id="2"><name type="primary" value="Dungeons &amp; Dragons"/></item></items>';
   assert.equal(pickBgg(parseBggThings(xml)).titre, 'Dungeons & Dragons');
+});
+
+// Vraie réponse de BGG (2026-10-31, 120 résultats pour « clank » dans le désordre) : le jeu de base doit être candidat.
+test('candidats sur la vraie recherche « clank » : Clank! (201808) en premier, pas noyé parmi 120 résultats', () => {
+  const items = parseBggSearch(fs.readFileSync(__dirname + '/fixtures/bgg-search-clank.xml', 'utf8'));
+  assert.ok(items.length >= 100);
+  const ids = bggCandidates('clank', items);
+  assert.ok(ids.length <= 20);
+  assert.equal(ids[0], '201808');
+});
+test('candidats : sans nom de base ni nom exact, les titres les plus courts passent devant', () => {
+  const items = [{ id: '1', type: 'boardgame', name: 'Chose Rouge Et Verte Et Bleue' }, { id: '2', type: 'boardgame', name: 'Une Chose Rouge' }];
+  assert.deepEqual(bggCandidates('chose rouge', items), ['2', '1']);
 });

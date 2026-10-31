@@ -46,11 +46,13 @@ Spec : `../docs/2026-10-13_notes-jeux-dashboard-design.md` · Plan : `../docs/20
 - Philibert : un jeu sans avis (ex. Clank! VF) n'a pas de `aggregateRating` → « pas encore d'avis ».
 - Dans un shell Windows, `curl "...?q=château"` envoie du Latin-1 : tester avec `scripts/smoke.mjs`.
 
-## BGG : abandonné
+## BGG (token d'application)
 
-La recherche par nom de BGG exige un token qu'on n'a pas (`api.geekdo.com/xmlapi2` → 401, `boardgamegeek.com` → Cloudflare 403). La page n'affiche plus de tuile BGG ; MyLudo la remplace (voir plus bas). Les nodes BGG du workflow restent en place mais renvoient `null` (`bgg` n'est plus lu par le front).
+BGG exige un token (`api.geekdo.com/xmlapi2` → 401 sans lui). Il est dans le credential n8n **Header Auth** « BGG api token » (id `hKNciaFSDVbw4COS`, `Authorization: Bearer <token>`), saisi dans l'interface n8n uniquement (jamais dans un node, un fichier ou le chat). Les nodes `BGG Search` et `BGG Thing` l'utilisent (Authentication = Generic → Header Auth). Tuile BGG : note /10 et votes ; `bgg.url` = lien direct vers la page du jeu (priorité sur Okkazeo).
 
-**Lien direct vers la page BGG** (sans token) : la fiche Okkazeo du jeu contient un lien `boardgamegeek.com/boardgame/<id>/<slug>` (node Sources → `bggUrl`). Repli : l'identifiant BGG de la liste BGA (`lib/bga-games.json`). Sinon, lien de recherche BGG. Okkazeo ne cherche que le titre exact : « catane » n'y trouve rien, donc pas de lien direct.
+**Piège (vécu le 2026-10-31)** : un credential référencé par son **nom seul** n'est pas résolu par n8n, qui lui substitue silencieusement un autre credential du même type (ici « GPT » : sa clé est partie vers BGG). Toujours référencer `{ id, name }` et relire le node par l'API juste après l'update, avant tout test. La recherche BGG renvoie ~120 résultats dans le désordre : `bggCandidates` classe nom exact, puis nom de base (avant « : »), puis titres courts (sinon *Clank!* était noyé derrière *Clank! In! Space!*). Fixture réelle : `tests/fixtures/bgg-search-clank.xml`.
+
+**Lien direct vers la page BGG** (cas sans fiche BGG) : la fiche Okkazeo du jeu contient un lien `boardgamegeek.com/boardgame/<id>/<slug>` (node Sources → `bggUrl`). Repli : la fiche Okkazeo (`bggUrl`), puis l'identifiant BGG de la liste BGA (`lib/bga-games.json`). Sinon, lien de recherche BGG. Okkazeo ne cherche que le titre exact : « catane » n'y trouve rien, donc pas de lien direct.
 
 **Board Game Arena** : la page charge `lib/bga-games.json` (même site GitHub Pages) et fait la correspondance dans le navigateur (`findBga` dans `index.html` : titre exact, puis à une lettre près, alias de 5 lettres et plus ; titres testés = la recherche et le titre MyLudo). pastille « BGA ✓ » cliquable (`gamepanel?game=<slug>`) à côté du nombre de joueurs si le jeu y est, « BGA » avec coche barrée sinon, rien si la liste est injoignable (ouverture en `file://`). La liste vient de la page `boardgamearena.com/gamelist` (`game_list`) : `node scripts/build-bga-list.mjs` la régénère (1 146 jeux publics le 2026-10-24), puis commit + push. Les titres français ne correspondent que si MyLudo donne le titre anglais ou si BGA a l'alias.
 

@@ -6,7 +6,7 @@
 <meta name="color-scheme" content="dark">
 <title>Notes Jeux</title>
 <style>
-:root{--bg:#121214;--card:#1c1c20;--line:#2c2c32;--txt:#ececf1;--mut:#8b8b96;--acc:#4f8cff;--ej:#e3342f;--ph:#f08c00;--ml:#9b59d0;--okk:#ff8a00;--ok:#34c759}
+:root{--bg:#121214;--card:#1c1c20;--line:#2c2c32;--txt:#ececf1;--mut:#8b8b96;--acc:#4f8cff;--ej:#e3342f;--ph:#f08c00;--bgg:#1f6fb2;--ml:#9b59d0;--okk:#ff8a00;--ok:#34c759}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--txt);font:14px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
 main{max-width:1100px;margin:0 auto;padding:16px}
@@ -19,7 +19,7 @@ a{color:var(--acc)}
 .head img{width:64px;height:64px;object-fit:cover;border-radius:10px;background:var(--card)}
 .head h1{font-size:20px;margin:0}
 .mut{color:var(--mut);font-size:12px}
-.tiles{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+.tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
 .tile{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px;min-width:0}
 .src{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--mut);display:flex;gap:6px;align-items:center}
 .dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
@@ -186,7 +186,7 @@ function bgaBadge(d, games) {
 // Sous les encarts : page BoardGameGeek du jeu (lien direct si connu, repli par l'identifiant BGA, sinon recherche).
 function liens(d, games) {
   const bga = findBga([d.query, d.myludo && d.myludo.titre], games);
-  const bggUrl = d.bggUrl || (bga && bga.bggId ? 'https://boardgamegeek.com/boardgame/' + bga.bggId : null);
+  const bggUrl = (d.bgg && d.bgg.url) || d.bggUrl || (bga && bga.bggId ? 'https://boardgamegeek.com/boardgame/' + bga.bggId : null);
   return `<div class="liens">${bggUrl ? ext(bggUrl, 'BoardGameGeek ↗') : ext(d.liens.bgg, 'Chercher sur BoardGameGeek ↗')}</div>`;
 }
 
@@ -204,14 +204,14 @@ function render(d, games) {
   const head = m
     ? `<div class="head">${m.image ? `<img src="${esc(m.image)}" alt="">` : ''}<div><h1>${esc(m.titre)}</h1><div class="mut">${[m.annee, m.joueurs && m.joueurs + ' joueurs', m.age].filter(Boolean).map(esc).join(' · ')}${bgaBadge(d, games)}</div></div></div>`
     : `<div class="head"><div><h1>${esc(d.query)}</h1><div class="mut">${bgaBadge(d, games)}</div></div></div>`;
-  const tiles = `<div class="tiles">${tile('Esprit Jeu', 'var(--ej)', d.espritjeu, 5, 'avis', L.espritjeu)}${tile('Philibert', 'var(--ph)', d.philibert, 5, 'avis', L.philibert)}</div>`;
+  const tiles = `<div class="tiles">${tile('Esprit Jeu', 'var(--ej)', d.espritjeu, 5, 'avis', L.espritjeu)}${tile('Philibert', 'var(--ph)', d.philibert, 5, 'avis', L.philibert)}${tile('BGG', 'var(--bgg)', d.bgg, 10, 'votes', L.bgg)}</div>`;
   $('#out').innerHTML = `${retour()}${ongletsHtml()}${head}${tiles}${myludo(m, L.myludo || '#')}${liens(d, games)}${auteur(m)}${okk(d.okkazeo, L.okkazeo)}`;
 }
 
 function skeleton() {
   const t = n => `<div class="tile"><div class="src">${n}</div><div class="skel" style="width:50%;height:22px"></div><div class="skel" style="width:70%"></div></div>`;
   const bloc = (cls, nom) => `<section class="${cls}"><header><b>${nom}</b></header><div style="padding:12px"><div class="skel"></div><div class="skel"></div><div class="skel"></div></div></section>`;
-  return `<div class="tiles">${t('Esprit Jeu')}${t('Philibert')}</div>${bloc('ml', 'MyLudo')}${bloc('okk', 'Okkazeo')}`;
+  return `<div class="tiles">${t('Esprit Jeu')}${t('Philibert')}${t('BGG')}</div>${bloc('ml', 'MyLudo')}${bloc('okk', 'Okkazeo')}`;
 }
 
 // Résultats déjà chargés, réaffichés sans rechargement pendant 15 min (clé : la recherche en minuscules).

@@ -6,8 +6,7 @@ import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const WORKFLOWS = [
-  // Nodes BGG non vérifiés : BGG abandonné (pas de token), ils ne sont plus redéployés quand lib/match.js change.
-  { id: 'wA0aeGJ9Uh0FqKnW', fichier: 'Notes Jeux API.json', nodes: { Sources: 'sources' } },
+  { id: 'wA0aeGJ9Uh0FqKnW', fichier: 'Notes Jeux API.json', nodes: { 'BGG Candidats': 'bgg-candidats', 'BGG Fiche': 'bgg-fiche', Sources: 'sources' } },
   { id: 'BpOByDLzTv8MtBky', fichier: 'Notes Jeux Panier.json', nodes: { Panier: 'panier' } },
 ];
 
