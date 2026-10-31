@@ -32,6 +32,7 @@ Spec : `../docs/2026-10-13_notes-jeux-dashboard-design.md` · Plan : `../docs/20
 
 ## Pièges vérifiés
 
+- **`this.helpers.httpRequest` décode le JSON tout seul** (selon le content-type) même avec `json: false` : `String(body)` donne `"[object Object]"`. Toujours `typeof r.body === 'string' ? JSON.parse(r.body) : r.body` (MyLudo, recommandations BGG).
 - **Sandbox des nodes Code n8n : pas de `URL` ni `URLSearchParams`** (`typeof URL` = undefined). `Buffer`, `require`, `module` existent.
 - **Ne jamais écrire de séquence `\uXXXX` dans le code d'un node** : la couche d'envoi la convertit en caractères invisibles (déployé ≠ testé). Utiliser `String.fromCharCode`.
 - **Esprit Jeu sert ses pages en ISO-8859-1** : requête en `arraybuffer` + `Buffer.from(...).toString('latin1')`, sinon les accents deviennent `�`.
@@ -70,15 +71,15 @@ Plusieurs jeux dans la barre (« Abyss, Clank, Azul », virgule ou point-virgule
 
 Les webhooks sont publics. La recherche déclenche environ 8 requêtes vers des sites tiers par appel (2 par boutique + 2 BGG) : acceptable pour un usage perso. Si besoin, ajouter une clé simple dans l'URL et la vérifier dans un node du workflow.
 
-## MyLudo (grand encart : note, infos, style de jeu, semblables)
+## MyLudo (grand encart : note, infos, style de jeu, même auteur)
 
 API interne non officielle, 3 requêtes de base (accueil → jeton CSRF + cookie, recherche, fiche) ; détail dans `docs/sources.md`. Jeu de base préféré aux extensions. Si l'API change, l'encart passe en « indisponible » sans casser le reste.
 
 - **Note** : `rating.game.note` (sur 10). **Infos** : `players`, `age`, `time_min/max`, `rating.complexity.note` (sur 5).
 - **Style de jeu** : `game/datas.php?type=info` → `themes.mecanisme` (+ `themes.theme`). On affiche les 5 mécaniques les plus **rares** (comptage `count` du tag, jeux de base seulement), pas les plus courantes.
-- **Semblable à** : pour chaque mécanique, `theme/datas.php?type=games&id=<tag>&order=byrankdesc&filter=basegame&limit=100` (les 100 mieux classés). Score = nombre de mécaniques partagées, pondéré par `1/√count` (une mécanique rare pèse plus). Exclus : le jeu, sa gamme (titre commençant par le sien), doublons d'éditions, non-jeux de base. Il faut ≥ 2 mécaniques en commun. 3 jeux, avec leur note (1 requête fiche chacun).
+- **Semblable à** : ce ne sont plus des jeux MyLudo. Depuis le 2026-10-31, ce sont les **recommandations des joueurs BGG** (`api.geekdo.com/api/geekitem/recs?objectid=<id BGG>&objecttype=thing`, sans token, point d'accès interne non officiel) pour le jeu retenu par les nodes BGG : `pickBggRecs` (`lib/bgg.js`) en garde 3, sans le jeu ni sa gamme ni doublon de nom de base, avec note, votes et rang BGG (aucune fiche à lire). Encart « Semblable à · recommandations BGG » au-dessus de « Du même auteur ». L'ancien calcul MyLudo (mécaniques partagées) était moins pertinent : supprimé. Les titres sont en anglais. Panne → `similaires: null` + erreur `bgg-recs`, le reste est servi.
 - **Du même auteur** : premier `people` au rôle « Auteur » de `type=info`, puis `people/datas.php?type=games&id=<id>&filter=basegame&limit=100&order=bytitle&page=1..3`. Cette liste n'est triable que par titre/date : pas de tri par notoriété. On classe par **nombre d'éditions** du titre (jeux les plus réédités), puis ceux déjà dans le top 100 d'une mécanique du jeu ; 7 jeux max, sans le jeu ni sa gamme, sans note. Ne **pas** lire les fiches des jeux de l'auteur : ~1 s chacune côté MyLudo, non parallélisable (40 fiches = 14 s mesurés). Heuristique : bonne pour Bauza (Hanabi, Tokaido, Takenoko), moyenne pour un auteur très prolifique (Cathala).
-- Coût : ~14 requêtes MyLudo par recherche (≤ 10 mécaniques) + 1 à 3 pages de l'auteur. Une fiche MyLudo non mise en cache coûte ~1 s : les 3 notes des semblables font l'essentiel du temps (3–4 s au total). Mécaniques/semblables en panne → `null` (« indisponible »), la note reste.
+- Coût : ~14 requêtes MyLudo par recherche (≤ 10 mécaniques, encore utilisées pour le style de jeu et pour classer les jeux de l'auteur) + 1 à 3 pages de l'auteur ; plus de fiche MyLudo lue en dehors de celle du jeu (≈ 1 s chacune). Recherche complète : 2 à 3 s. Mécaniques en panne → `null` (« indisponible »), la note reste.
 - Mécaniques en **français** (MyLudo) : pas les libellés BGG (« Push Your Luck »).
-- Limites vues en production : les « semblables » restent approximatifs (Abyss → Râ pertinent, les deux autres moins) ; MyLudo liste des jeux datés dans le futur (2027) ; `rating.game` peut être vide pour un jeu récent (Drillers).
+- Limites vues en production : MyLudo liste des jeux datés dans le futur (2027) ; `rating.game` peut être vide pour un jeu récent (Drillers). Recommandations BGG d'un jeu très récent (Drillers) : jeux obscurs, peu de joueurs en ont écrit.
 - Fixtures : `tests/fixtures/myludo-info-*.json` et `myludo-tags-clank.json` (listes allégées à id/code/title/edition/type).

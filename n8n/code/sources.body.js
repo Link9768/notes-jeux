@@ -88,7 +88,7 @@ async function myludo() {
   const p = pickMyludo(q, parseMyludoSearch(await call('search/datas.php?type=search&tab=games&page=1&order=bymagic&words=' + enc)));
   if (!p) return null;
   const fiche = parseMyludoGame(await call('game/datas.php?type=game&id=' + encodeURIComponent(p.id)));
-  // Mécaniques et semblables : facultatifs. Une panne met ces deux champs à null sans effacer la note.
+  // Mécaniques et jeux du même auteur : facultatifs. Une panne met ces champs à null sans effacer la note.
   try {
     const info = parseMyludoInfo(await call('game/datas.php?type=info&id=' + encodeURIComponent(p.id)));
     // Jeux de base du tag, du mieux classé au moins bien (même liste que le clic sur un tag du site) ; max 10 mécaniques.
@@ -96,10 +96,6 @@ async function myludo() {
       const l = await call(`theme/datas.php?type=games&id=${m.id}&order=byrankdesc&filter=basegame&limit=100`);
       return { ...m, count: Number(l.count) || 0, list: l.list || [] };
     }))).filter(r => r.status === 'fulfilled').map(r => r.value);
-    const similaires = await Promise.all(pickSimilaires(fiche.titre, tagLists).map(async s => {
-      try { const g = parseMyludoGame(await call('game/datas.php?type=game&id=' + encodeURIComponent(s.id))); return { ...s, note: g.note, avis: g.avis }; }
-      catch (e) { return { ...s, note: null, avis: null }; }
-    }));
     // Jeux du même auteur (le premier cité), sans lire leurs fiches (lent) : voir pickAuteurJeux. Facultatif.
     let memeAuteur = null;
     try {
@@ -113,20 +109,31 @@ async function myludo() {
         memeAuteur = { nom: auteur.nom, jeux: pickAuteurJeux(fiche.titre, liste, populaires) };
       }
     } catch (e) { memeAuteur = null; }
-    return { ...fiche, mecaniques: topMecaniques(tagLists), themes: info.themes.slice(0, 3), similaires, memeAuteur };
+    return { ...fiche, mecaniques: topMecaniques(tagLists), themes: info.themes.slice(0, 3), memeAuteur };
   } catch (e) {
-    return { ...fiche, mecaniques: null, themes: null, similaires: null, memeAuteur: null };
+    return { ...fiche, mecaniques: null, themes: null, memeAuteur: null };
   }
 }
 
-const [ej, ph, ok, ml] = await Promise.allSettled([
+// Jeux similaires = recommandations des joueurs BGG pour le jeu retenu par les nodes BGG (voir pickBggRecs).
+async function recsBgg() {
+  const id = bgg && bgg.url && (String(bgg.url).match(/\/boardgame\/(\d+)/) || [])[1];
+  if (!id) return null;
+  const r = await getFull(`https://api.geekdo.com/api/geekitem/recs?objectid=${id}&objecttype=thing`, { ...UA, 'Accept': 'application/json' });
+  if (r.statusCode >= 400) throw new Error(`HTTP ${r.statusCode} geekitem/recs`);
+  // n8n décode lui-même le JSON (selon le content-type) malgré json: false : objet ou texte selon les cas.
+  return pickBggRecs(typeof r.body === 'string' ? JSON.parse(r.body) : r.body, bgg.titre);
+}
+
+const [ej, ph, ok, ml, sim] = await Promise.allSettled([
   boutique(liens.espritjeu, parseEspritJeuSearch, 'latin1'),
   boutique(liens.philibert, parsePhilibertSearch),
   okkazeo(),
   myludo(),
+  recsBgg(),
 ]);
 const val = r => (r.status === 'fulfilled' ? r.value : null);
 // Lien direct vers la page BoardGameGeek, lu dans la fiche Okkazeo (null si inconnu : la page propose alors la recherche BGG).
 const bggUrl = (val(ok) || {}).bggUrl || null;
-const erreurs = [ej, ph, ok, ml].map((r, i) => r.status === 'rejected' ? `${['espritjeu', 'philibert', 'okkazeo', 'myludo'][i]}: ${(r.reason && r.reason.message) || String(r.reason)}` : null).filter(Boolean);
-return [{ json: { query: q, espritjeu: val(ej), philibert: val(ph), bgg, okkazeo: val(ok), myludo: val(ml), bggUrl, liens, erreurs } }];
+const erreurs = [ej, ph, ok, ml, sim].map((r, i) => r.status === 'rejected' ? `${['espritjeu', 'philibert', 'okkazeo', 'myludo', 'bgg-recs'][i]}: ${(r.reason && r.reason.message) || String(r.reason)}` : null).filter(Boolean);
+return [{ json: { query: q, espritjeu: val(ej), philibert: val(ph), bgg, okkazeo: val(ok), myludo: val(ml), similaires: val(sim), bggUrl, liens, erreurs } }];

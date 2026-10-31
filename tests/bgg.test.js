@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
-const { parseBggSearch, bggCandidates, parseBggThings, pickBgg } = require('../lib/bgg.js');
+const { parseBggSearch, bggCandidates, parseBggThings, pickBgg, pickBggRecs } = require('../lib/bgg.js');
 
 // XML au format officiel xmlapi2 (déduit : fixtures réelles à ajouter quand le token BGG existe)
 const search = `<items total="3">
@@ -62,4 +62,20 @@ test('candidats sur la vraie recherche « clank » : Clank! (201808) en premier,
 test('candidats : sans nom de base ni nom exact, les titres les plus courts passent devant', () => {
   const items = [{ id: '1', type: 'boardgame', name: 'Chose Rouge Et Verte Et Bleue' }, { id: '2', type: 'boardgame', name: 'Une Chose Rouge' }];
   assert.deepEqual(bggCandidates('chose rouge', items), ['2', '1']);
+});
+
+// Vraie réponse de geekitem/recs pour Clank! (2026-10-31), allégée aux champs lus.
+const recs = () => JSON.parse(fs.readFileSync(__dirname + '/fixtures/bgg-recs-clank.json', 'utf8'));
+test('recommandations BGG : 3 jeux, sans la gamme du jeu (Clank! In! Space!, Clank! Legacy), avec note et lien', () => {
+  const s = pickBggRecs(recs(), 'Clank!: A Deck-Building Adventure');
+  assert.deepEqual(s.map(x => x.titre), ['Terraforming Mars: Ares Expedition', 'Everdell', 'Scythe']);
+  assert.deepEqual([s[1].note, s[1].annee, s[1].url], [8, 2018, 'https://boardgamegeek.com/boardgame/199792/everdell']);
+  assert.ok(s.every(x => x.avis > 0 && x.rang > 0));
+  assert.ok(pickBggRecs(recs(), 'Clank!', 30).every(x => !/^clank/i.test(x.titre)));
+});
+test('recommandations BGG : doublons de nom de base retirés, réponse vide ou absente → []', () => {
+  const r = { recs: [{ item: { id: 1, name: 'Ticket to Ride', href: '/boardgame/1/a' }, rating: 7.4 }, { item: { id: 2, name: 'Ticket to Ride: Europe', href: '/boardgame/2/b' }, rating: 7.5 }] };
+  assert.deepEqual(pickBggRecs(r, 'Catan').map(x => x.titre), ['Ticket to Ride']);
+  assert.deepEqual(pickBggRecs({}, 'X'), []);
+  assert.deepEqual(pickBggRecs(null, 'X'), []);
 });

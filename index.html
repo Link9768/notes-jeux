@@ -110,12 +110,22 @@ function tile(name, color, d, scale, unit, searchUrl) {
   const val = d.note == null
     ? `<div class="na">pas encore d'avis</div>`
     : `<div class="big">${fr(d.note)}<small>/${scale}</small></div><div class="mut">${d.avis ?? d.votes ?? '?'} ${unit}</div>`;
-  return `<div class="tile">${src}${val}<div class="match">« ${esc(d.titre)} » ${ext(d.url, '↗')}</div></div>`;
+  // Durée et poids (BGG) : ⚖ = complexité sur 5.
+  const infos = [d.duree && `⏱ ${esc(d.duree)} min`, d.poids != null && `⚖ ${fr(d.poids)}/5`].filter(Boolean);
+  const plus = infos.length ? `<div class="mut" style="margin-top:4px">${infos.join(' · ')}</div>` : '';
+  return `<div class="tile">${src}${val}${plus}<div class="match">« ${esc(d.titre)} » ${ext(d.url, '↗')}</div></div>`;
 }
 
-// Une ligne de jeu (semblable ou du même auteur) : lien MyLudo, année, bouton 🔍 qui lance sa recherche, note si connue.
+// Une ligne de jeu (semblable ou du même auteur) : lien vers sa fiche, année, bouton 🔍 qui lance sa recherche, note si connue.
 function ligneJeu(s) {
   return `<div class="sim"><span>${ext(s.url, esc(s.titre))} <span class="mut">${s.annee ?? ''}</span><button type="button" class="go" data-q="${esc(s.titre)}" title="Chercher ${esc(s.titre)}" aria-label="Chercher ${esc(s.titre)}">🔍</button></span><span>${s.note != null ? `<b>${fr(s.note)}</b><span class="mut">/10</span>` : ''}</span></div>`;
+}
+
+// Encart « Semblable à » : recommandations des joueurs BGG (note BGG sur 10).
+function semblables(d) {
+  const s = d && d.similaires;
+  if (!s || !s.length) return '';
+  return `<section class="aut"><h3>Semblable à · recommandations BGG</h3><div class="autjeux">${s.map(ligneJeu).join('')}</div></section>`;
 }
 
 // Encart tout en bas : les jeux les plus connus du même auteur (voir CLAUDE.md).
@@ -133,7 +143,7 @@ function retour() {
   return p ? `<button type="button" class="back">← Retour à ${esc((p.myludo && p.myludo.titre) || p.query)}</button>` : '';
 }
 
-// Grand encart MyLudo : note de la communauté, infos pratiques, style de jeu (mécaniques) et jeux semblables.
+// Grand encart MyLudo : note de la communauté, infos pratiques, style de jeu (mécaniques).
 function myludo(m, lien) {
   if (!m) return `<section class="ml"><header><b>MyLudo</b><span>indisponible</span></header><footer>${ext(lien, 'Chercher sur MyLudo ↗')}</footer></section>`;
   const note = m.note == null ? `<span class="na">pas encore d'avis</span>` : `<span class="big">${fr(m.note)}<small>/10</small></span> <span class="mut">${m.avis} notes</span>`;
@@ -141,8 +151,7 @@ function myludo(m, lien) {
   const style = m.mecaniques === null || m.mecaniques === undefined
     ? '<div class="na">indisponible</div>'
     : `<div class="chips">${m.mecaniques.map(x => `<span class="chip">${esc(x)}</span>`).join('')}${(m.themes || []).map(x => `<span class="chip th">${esc(x)}</span>`).join('')}</div>`;
-  const sims = (m.similaires || []).map(ligneJeu).join('');
-  return `<section class="ml"><header><b>MyLudo</b><span>${m.annee ? esc(m.annee) : ''}</span></header><div class="body"><div>${note}</div><div class="facts">${facts}</div><div><h3>Style de jeu</h3>${style}</div>${sims ? `<div><h3>Semblable à</h3>${sims}</div>` : ''}</div><footer>${ext(m.url, 'Ouvrir sur MyLudo ↗')}</footer></section>`;
+  return `<section class="ml"><header><b>MyLudo</b><span>${m.annee ? esc(m.annee) : ''}</span></header><div class="body"><div>${note}</div><div class="facts">${facts}</div><div><h3>Style de jeu</h3>${style}</div></div><footer>${ext(m.url, 'Ouvrir sur MyLudo ↗')}</footer></section>`;
 }
 
 // Board Game Arena : liste des jeux publics (lib/bga-games.json, régénérée par scripts/build-bga-list.mjs) chargée avec la page.
@@ -205,7 +214,7 @@ function render(d, games) {
     ? `<div class="head">${m.image ? `<img src="${esc(m.image)}" alt="">` : ''}<div><h1>${esc(m.titre)}</h1><div class="mut">${[m.annee, m.joueurs && m.joueurs + ' joueurs', m.age].filter(Boolean).map(esc).join(' · ')}${bgaBadge(d, games)}</div></div></div>`
     : `<div class="head"><div><h1>${esc(d.query)}</h1><div class="mut">${bgaBadge(d, games)}</div></div></div>`;
   const tiles = `<div class="tiles">${tile('Esprit Jeu', 'var(--ej)', d.espritjeu, 5, 'avis', L.espritjeu)}${tile('Philibert', 'var(--ph)', d.philibert, 5, 'avis', L.philibert)}${tile('BGG', 'var(--bgg)', d.bgg, 10, 'votes', L.bgg)}</div>`;
-  $('#out').innerHTML = `${retour()}${ongletsHtml()}${head}${tiles}${myludo(m, L.myludo || '#')}${liens(d, games)}${auteur(m)}${okk(d.okkazeo, L.okkazeo)}`;
+  $('#out').innerHTML = `${retour()}${ongletsHtml()}${head}${tiles}${myludo(m, L.myludo || '#')}${liens(d, games)}${semblables(d)}${auteur(m)}${okk(d.okkazeo, L.okkazeo)}`;
 }
 
 function skeleton() {

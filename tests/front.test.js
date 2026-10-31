@@ -7,7 +7,7 @@ const vm = require('node:vm');
 const html = fs.readFileSync(`${__dirname}/../index.html`, 'utf8');
 const script = html.match(/<script>([\s\S]*?)<\/script>/)[1];
 const el = () => ({ addEventListener() {}, value: '', innerHTML: '' });
-const front = vm.runInNewContext(`${script}; ({ okk, tile, fr, myludo, liens, findBga, bgaBadge, auteur, retour, pile, panierHtml })`, {
+const front = vm.runInNewContext(`${script}; ({ okk, tile, fr, myludo, liens, findBga, bgaBadge, auteur, retour, pile, panierHtml, semblables })`, {
   document: { querySelector: el }, location: { search: '' }, history: {}, fetch: async () => { throw new Error('pas de réseau'); }, URLSearchParams,
 });
 
@@ -40,9 +40,9 @@ test('texte venant des sites échappé (pas d\'injection HTML)', () => {
 
 const ml = over => ({ note: 8.3, avis: 1500, titre: 'Clank!', url: 'https://www.myludo.fr/#!/game/clank-19410', annee: 2017, joueurs: '2 — 4', duree: 60, complexite: 2.5,
   mecaniques: ['Card-driven', 'Deck building'], themes: ['Dragons'], similaires: [{ titre: 'Tainted Grail', annee: 2019, url: 'https://www.myludo.fr/#!/game/tainted-grail-27766', note: 8.6 }], ...over });
-test('encart MyLudo : note, infos, mécaniques, thèmes et semblables avec leur note', () => {
+test('encart MyLudo : note, infos, mécaniques et thèmes (plus de semblables : ils viennent de BGG)', () => {
   const h = front.myludo(ml(), '#');
-  for (const t of ['8,3', '/10', '1500 notes', '60 min', '2 — 4', '2,5/5', 'Deck building', 'Dragons', 'Semblable à', 'Tainted Grail', '8,6']) assert.ok(h.includes(t), t);
+  for (const t of ['8,3', '/10', '1500 notes', '60 min', '2 — 4', '2,5/5', 'Deck building', 'Dragons']) assert.ok(h.includes(t), t);
 });
 test('encart MyLudo : source nulle → indisponible ; mécaniques null → indisponible sans effacer la note', () => {
   assert.ok(front.myludo(null, 's').includes('indisponible'));
@@ -53,7 +53,7 @@ test('encart MyLudo : texte venant du site échappé', () => {
   assert.ok(!front.myludo(ml({ mecaniques: ['<img src=x onerror=alert(1)>'] }), '#').includes('<img src=x'));
 });
 test('semblables : bouton 🔍 portant le titre (échappé) pour relancer la recherche', () => {
-  const h = front.myludo(ml({ similaires: [{ titre: "L'Île \"X\"", annee: 2019, url: 'u', note: 8 }] }), '#');
+  const h = front.semblables({ similaires: [{ titre: "L'Île \"X\"", annee: 2019, url: 'u', note: 8 }] });
   assert.ok(h.includes('class="go"') && h.includes('data-q="L&#39;Île &quot;X&quot;"'), h);
 });
 
@@ -184,4 +184,19 @@ test('un seul jeu : pas de barre d’onglets', async () => {
 test('liens : la page BGG vient de la fiche BGG en priorité (token BGG), puis d’Okkazeo', () => {
   const h = front.liens(lien({ bgg: { url: 'https://boardgamegeek.com/boardgame/155987' }, bggUrl: 'https://boardgamegeek.com/boardgame/1/autre' }), games);
   assert.ok(h.includes('href="https://boardgamegeek.com/boardgame/155987"') && !h.includes('/autre'));
+});
+
+test('tuile BGG : durée et poids affichés sous la note', () => {
+  const h = front.tile('BGG', 'blue', { note: 7.8, votes: 48292, duree: '30–60', poids: 2.23, titre: 'Clank!', url: 'u' }, 10, 'votes', 's');
+  assert.ok(h.includes('7,8') && h.includes('48292 votes') && h.includes('⏱ 30–60 min') && h.includes('⚖ 2,23/5'));
+  const sans = front.tile('Philibert', 'red', { note: 4.5, avis: 3, titre: 'X', url: 'u' }, 5, 'avis', 's');
+  assert.ok(!sans.includes('⏱') && !sans.includes('⚖')); // les autres sources n'ont ni durée ni poids
+});
+
+test('encart « Semblable à » : recommandations BGG avec note et bouton 🔍 ; rien si absentes', () => {
+  const h = front.semblables({ similaires: [{ titre: 'Everdell', annee: 2018, url: 'https://boardgamegeek.com/boardgame/199792/everdell', note: 8 }] });
+  assert.ok(h.includes('Semblable à · recommandations BGG') && h.includes('Everdell') && h.includes('href="https://boardgamegeek.com/boardgame/199792/everdell"') && h.includes('data-q="Everdell"'));
+  assert.ok(!front.myludo(ml(), '#').includes('Semblable à'));
+  assert.equal(front.semblables({ similaires: null }), '');
+  assert.equal(front.semblables({ similaires: [] }), '');
 });

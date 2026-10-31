@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
-const { parseMyludoSearch, pickMyludo, parseMyludoGame, parseMyludoInfo, topMecaniques, pickSimilaires, pickAuteurJeux } = require('../lib/myludo.js');
+const { parseMyludoSearch, pickMyludo, parseMyludoGame, parseMyludoInfo, topMecaniques, pickAuteurJeux } = require('../lib/myludo.js');
 const fx = n => JSON.parse(fs.readFileSync(`${__dirname}/fixtures/${n}`, 'utf8'));
 
 test('recherche : candidats avec titre, id, type et lien', () => {
@@ -59,21 +59,6 @@ test('mécaniques principales : les 5 plus rares, pas les plus répandues', () =
   assert.equal(m.length, 5);
   assert.ok(m.includes('Deck building') && m.includes('Card-driven'));
   assert.ok(!m.includes('Prise de risque') && !m.includes('Parcours')); // 1 851 et 1 739 jeux : trop courantes
-});
-test('semblables : 3 jeux de base, ni le jeu ni sa gamme ni doublon d\'édition', () => {
-  const s = pickSimilaires('Clank!', clankTags());
-  assert.equal(s.length, 3);
-  assert.ok(s.every(x => x.titre && x.url.startsWith('https://www.myludo.fr/#!/game/')));
-  assert.ok(s.every(x => !/^clank/i.test(x.titre)), JSON.stringify(s.map(x => x.titre)));
-  assert.equal(new Set(s.map(x => x.titre)).size, 3);
-});
-test('semblables : ne garde que les jeux partageant au moins 2 mécaniques', () => {
-  const t = (id, count, titres) => ({ id, nom: id, count, list: titres.map((titre, i) => ({ id: String(i), code: 'c', title: titre, type: 'basegame' })) });
-  const s = pickSimilaires('Mon jeu', [t('a', 10, ['Seul A', 'Double']), t('b', 20, ['Double', 'Seul B'])]);
-  assert.deepEqual(s.map(x => x.titre), ['Double']);
-});
-test('semblables : listes vides → tableau vide', () => {
-  assert.deepEqual(pickSimilaires('X', []), []);
 });
 test('info : auteurs (rôle « Auteur » seulement, dans l’ordre)', () => {
   assert.deepEqual(parseMyludoInfo(fx('myludo-info-clank.json')).auteurs, [{ id: '11451', nom: 'Paul Dennen' }]);
