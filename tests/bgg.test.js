@@ -25,13 +25,25 @@ test('fiche', () => {
     note: 7.7, votes: 45678, duree: '30–60', poids: 2.24, titre: 'Clank!: A Deck-Building Adventure',
     annee: 2016, joueurs: '2–4', age: '12+', image: 'https://cf.geekdo-images.com/x.jpg',
     url: 'https://boardgamegeek.com/boardgame/201808', mecaniques: [], themes: [],
+    id: '201808', rang: null, rangCat: null, ideal: null, extensions: 0,
   });
+});
+test('fiche Abyss réelle : rang général + catégorie principale, idéal à 4, 7 extensions, mécaniques avec id', () => {
+  const b = pickBgg(parseBggThings(fs.readFileSync(__dirname + '/fixtures/bgg-thing-abyss.xml', 'utf8')));
+  assert.deepEqual([b.rang, b.rangCat, b.ideal, b.extensions], [453, { rang: 341, nom: 'stratégie' }, '4', 7]);
+  assert.deepEqual(b.mecaniques[0], { id: '2012', nom: 'Enchères' });
+});
+test('meilleur nombre de joueurs : fourchette décodée, sondage absent → null', () => {
+  const x = v => `<items><item type="boardgame" id="1"><name type="primary" value="X"/><poll-summary name="suggested_numplayers"><result name="bestwith" value="${v}" /></poll-summary></item></items>`;
+  assert.equal(pickBgg(parseBggThings(x('Best with 3–4 players'))).ideal, '3–4');
+  assert.equal(pickBgg(parseBggThings(x('Best with 2 players'))).ideal, '2');
+  assert.equal(pickBgg(parseBggThings('<items><item type="boardgame" id="1"><name type="primary" value="X"/></item></items>')).ideal, null);
 });
 // Vraie réponse BGG Thing (exécution n8n du 2026-10-31, recherche « abyss », 8 fiches).
 test('style de jeu BGG en français : toutes les mécaniques, complétées par les catégories (≥ 7 au total)', () => {
   const b = pickBgg(parseBggThings(fs.readFileSync(__dirname + '/fixtures/bgg-thing-abyss.xml', 'utf8')));
   assert.equal(b.titre, 'Abyss');
-  assert.deepEqual(b.mecaniques, ['Enchères', 'Gestion de main', 'Mémoire', 'Draft ouvert', 'Stop ou encore', 'Collection']);
+  assert.deepEqual(b.mecaniques.map(m => m.nom), ['Enchères', 'Gestion de main', 'Mémoire', 'Draft ouvert', 'Stop ou encore', 'Collection']);
   assert.deepEqual(b.themes, ['Jeu de cartes', 'Fantastique', 'Mythologie']);
 });
 test('style de jeu : libellé inconnu gardé en anglais, au moins 3 catégories, 10 mécaniques max', () => {
@@ -41,10 +53,10 @@ test('style de jeu : libellé inconnu gardé en anglais, au moins 3 catégories,
   const cats = ['Fantasy', 'Horror', 'Pirates', 'Zombies'].map(c => lk('boardgamecategory', c)).join('');
   const b = pickBgg(parseBggThings(`<items><item type="boardgame" id="1"><name type="primary" value="X"/>${meca}${cats}${lk('boardgamemechanic', 'Race')}</item></items>`));
   assert.equal(b.mecaniques.length, 10);
-  assert.equal(b.mecaniques[0], 'Nouveau 0');
+  assert.equal(b.mecaniques[0].nom, 'Nouveau 0');
   assert.deepEqual(b.themes, ['Fantastique', 'Horreur', 'Pirates']);
   const peu = pickBgg(parseBggThings(`<items><item type="boardgame" id="1"><name type="primary" value="X"/>${lk('boardgamemechanic', 'Race')}${cats}${lk('boardgamecategory', 'Racing')}</item></items>`));
-  assert.deepEqual([peu.mecaniques, peu.themes], [['Course'], ['Fantastique', 'Horreur', 'Pirates', 'Zombies']]); // « Course » pas en double
+  assert.deepEqual([peu.mecaniques.map(m => m.nom), peu.themes], [['Course'], ['Fantastique', 'Horreur', 'Pirates', 'Zombies']]); // « Course » pas en double
 });
 test('aucune fiche → null', () => assert.equal(pickBgg([]), null));
 test('jeu de base préféré à l’extension, puis le plus voté', () => {

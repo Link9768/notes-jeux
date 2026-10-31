@@ -63,6 +63,7 @@ test('sources : les 3 boutiques + annonces Okkazeo filtrées à ≤ 10 km, trié
   assert.deepEqual([out.espritjeu.note, out.espritjeu.avis, out.espritjeu.titre], [4.9, 34, 'Clank!']);
   assert.equal(out.philibert.titre, 'Clank!');
   assert.equal(out.philibert.note, null); // Clank! VF : aucun avis
+  assert.deepEqual([out.espritjeu.prix, out.philibert.prix], [54, 57.9]); // prix neuf (JSON-LD offers.price)
   assert.equal(out.okkazeo.total, 14);
   assert.deepEqual(out.okkazeo.annonces.map(a => a.cp), ['93300', '94220', '75019', '94100']);
   assert.deepEqual(out.okkazeo.annonces.map(a => a.prix), [35, 49, 70, 190]);
@@ -274,5 +275,6 @@ test('bgg-fiche : fiche si ids, sinon null', async () => {
   const none = await run('bgg-fiche', { nodes: { 'BGG Candidats': { ids: '' } }, input: { data: '' } });
   assert.equal(none.out.bgg, null);
   const abyss = await run('bgg-fiche', { nodes: { 'BGG Candidats': { ids: '155987' } }, input: { data: fx('bgg-thing-abyss.xml') } });
-  assert.deepEqual([abyss.out.bgg.mecaniques.length + abyss.out.bgg.themes.length, abyss.out.bgg.mecaniques[0]], [9, 'Enchères']);
+  assert.deepEqual([abyss.out.bgg.mecaniques.length + abyss.out.bgg.themes.length, abyss.out.bgg.mecaniques[0].nom], [9, 'Enchères']);
+  assert.deepEqual([abyss.out.bgg.rang, abyss.out.bgg.ideal, abyss.out.bgg.extensions], [453, '4', 7]);
 });

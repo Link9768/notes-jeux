@@ -12,6 +12,8 @@ Spec : `../docs/2026-10-13_notes-jeux-dashboard-design.md` · Plan : `../docs/20
 | Workflow n8n « Notes Jeux — API » | `wA0aeGJ9Uh0FqKnW` (actif, `webhookId` `7c1e4a52-9d3b-4f6e-8a21-5b0c9e3d7f14`) |
 | Webhook matchmaking (GET `?jeux=A|B|C`) | `https://n8n.srv1250642.hstgr.cloud/webhook/notes-jeux-panier` |
 | Workflow n8n « Notes Jeux — Panier » | `BpOByDLzTv8MtBky` (actif, `webhookId` `10db9f42-1e86-4a88-ab2b-de28f39f6c84`) |
+| Webhook outils (GET `?op=ext\|meca\|jumeaux&id=<id BGG>`, `op=suggest&q=`, `op=ean&code=`) | `https://n8n.srv1250642.hstgr.cloud/webhook/notes-jeux-outils` |
+| Workflow n8n « Notes Jeux — Outils » | `tETUBgC3dAyYKHMn` (actif, `webhookId` `4ff48a3f-14f0-4866-8a30-5045489b4daa`) |
 | Workflow de sonde (jetable, **désactivé**) | `VyS0j6QufSY69IpC` — webhook ouvert qui récupère n'importe quelle URL : ne le laisser actif que le temps d'un test |
 | Page publique prévue | `https://link9768.github.io/notes-jeux/` (repo `Link9768/notes-jeux`) |
 
@@ -68,6 +70,16 @@ Case en bas de page : 2 à 8 jeux (un par ligne) → vendeurs Okkazeo qui en pro
 Les résultats déjà chargés sont gardés 15 min en mémoire de la page (clé : recherche en minuscules) : re-cliquer sur un jeu déjà vu ne rappelle pas le webhook. 🔍 sur un jeu (semblables, même auteur) empile l'écran courant ; « ← Retour à … » le réaffiche sans réseau.
 
 Plusieurs jeux dans la barre (« Abyss, Clank, Azul », virgule ou point-virgule, 8 max) : un onglet par jeu, tous chargés en parallèle (`charger` : un même jeu n'est demandé qu'une fois), puis navigation sans réseau. Étiquette = titre MyLudo une fois chargé, « … » pendant le chargement, « ⚠ » en cas d'échec (un clic relance).
+
+## v2 (2026-10-31) — spec : `../docs/2026-10-31_notes-jeux-v2-design.md`
+
+- **Encart BGG** : rang général + rang de la meilleure famille (`🏆 #452 · #341 stratégie`), `idéal à` (sondage `bestwith`), pastille « Extensions ✓ » (si `bgg.extensions > 0`) qui déplie la liste notée, mécaniques cliquables (`{id, nom}`) → top 20 BGG de la mécanique.
+- **Prix neuf** : `priceOf` (JSON-LD `offers.price`) dans les tuiles Esprit Jeu / Philibert ; chaque annonce Okkazeo affiche l'écart au neuf le moins cher (`−45 %`, vert ≤ −30 %, orange ≤ −10 %).
+- **Workflow Outils** (au clic, `lib/outils.js`, `n8n/code/outils.body.js`) : points d'accès internes BGG **sans token** `api.geekdo.com/api/geekitem/linkeditems` (liste d'une mécanique/famille/catégorie triée par rang, avec `config.numitems` = taille de l'étiquette) et `api.geekdo.com/api/geekitems` (fiche avec `links`). Pas de CORS → toujours via n8n. `boardgamegeek.com/search/...` répond 403 (d'où la saisie semi-automatique via MyLudo, ~2 s).
+- **Jumeaux** : score sur données réelles, pas d'IA. Rareté d'une étiquette = log(150 000 / nb de jeux), mécaniques et familles « Mechanism: » ×1, familles « Theme: » et catégories ×0,5 ; présélection des 15 jeux qui partagent le plus de rareté (top 50 par rang de chaque étiquette), puis fiche de chacun, pénalités poids/durée/joueurs, bonus de notoriété ; seuil 0,2, 2 jeux max. Validé : Skull King → Skull Queen + Wizard (absent des recos BGG), 7 Wonders Duel → Duel for Middle-earth, Azul → Sagrada + Calico. ~25 requêtes geekdo, 6 en parallèle, ~1,3 s. `scripts/outils-live.mjs <op> <id> [--save fixture]` exécute le node en vrai.
+- **Code-barres** : 📷 → `capture` → `BarcodeDetector` (Android) sinon ZXing (`@zxing/library@0.21.3`, chargé à la demande) → `op=ean` (recherche Philibert par EAN, sinon Esprit Jeu).
+- **Onglets** : un 🔍 ouvre le jeu ET l'ajoute en onglet (le jeu d'origine aussi) ; ✕ par onglet ; 15 max ; onglet « ⚖ Comparer » dès 2 jeux chargés ; bouton `🛒 N jeux → matchmaking` sous la recherche (titres MyLudo). « ← Retour à » conservé.
+- Piège vu en écrivant le node : dans une `async function` déclarée, `this` n'est pas le contexte n8n → `this.helpers` plante. Passer par une fonction fléchée définie au niveau du node (`req`, `reqLatin1`).
 
 ## Sécurité
 

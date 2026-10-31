@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 const WORKFLOWS = [
   { id: 'wA0aeGJ9Uh0FqKnW', fichier: 'Notes Jeux API.json', nodes: { 'BGG Candidats': 'bgg-candidats', 'BGG Fiche': 'bgg-fiche', Sources: 'sources' } },
   { id: 'BpOByDLzTv8MtBky', fichier: 'Notes Jeux Panier.json', nodes: { Panier: 'panier' } },
+  { id: 'tETUBgC3dAyYKHMn', fichier: 'Notes Jeux Outils.json', nodes: { Outils: 'outils' } },
 ];
 
 const mcp = JSON.parse(readFileSync(new URL('../../.mcp.json', import.meta.url), 'utf8')).mcpServers['n8n-mcp'].env;

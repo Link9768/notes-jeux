@@ -173,11 +173,11 @@ test('plusieurs jeux séparés par des virgules : un onglet par jeu, tous charg�
     },
   };
   const f = vm.runInNewContext(`${script}; ({ lancer })`, ctx);
-  f.lancer('abyss, Clank ; abyss, azul, a, b, c, d, e, f');
+  f.lancer('abyss, Clank ; abyss, azul, a, b, c, d, e');
   await new Promise(r => setTimeout(r, 20));
-  assert.deepEqual(appels.sort(), ['Clank', 'a', 'abyss', 'azul', 'b', 'c', 'd', 'e'].sort()); // doublon retiré, 8 au plus
+  assert.deepEqual(appels.sort(), ['Clank', 'a', 'abyss', 'azul', 'b', 'c', 'd', 'e'].sort()); // doublon retiré
   const out = els['#out'];
-  assert.ok(out.innerHTML.includes('class="onglets"') && out.innerHTML.includes('Titre abyss') && out.innerHTML.includes('onglet on'));
+  assert.ok(out.innerHTML.includes('class="onglets"') && out.innerHTML.includes('Titre abyss') && out.innerHTML.includes('onglet-g on'));
   const clic = i => out.handlers.click({ target: { closest: s => (s === '.onglet' ? { dataset: { i: String(i) } } : null) } });
   clic(2);
   await new Promise(r => setTimeout(r, 5));
@@ -212,4 +212,65 @@ test('encart « Semblable à » : recommandations BGG avec note et bouton 🔍 ;
   assert.ok(h.includes('Semblable à · recommandations BGG') && h.includes('Everdell') && h.includes('href="https://boardgamegeek.com/boardgame/199792/everdell"') && h.includes('data-q="Everdell"'));
   assert.equal(front.semblables({ similaires: null }), '');
   assert.equal(front.semblables({ similaires: [] }), '');
+});
+
+// ---- v2 : rang, idéal, extensions, mécaniques cliquables, bonne affaire, comparateur, onglets ajoutés par 🔍
+const front2 = vm.runInNewContext(`${script}; ({ bggCard, okk, comparerHtml, dealTag, prixNeuf, tile })`, {
+  document: { querySelector: el }, location: { search: '' }, history: {}, fetch: async () => { throw new Error('pas de réseau'); }, URLSearchParams,
+});
+const bggV2 = over => ({ query: 'abyss', myludo: { titre: 'Abyss' }, liens: { bgg: '#' }, bgg: { id: '155987', note: 7.3, votes: 17096, duree: '30–60', joueurs: '2–4', poids: 2.31, annee: 2014,
+  titre: 'Abyss', url: 'https://boardgamegeek.com/boardgame/155987', rang: 453, rangCat: { rang: 341, nom: 'stratégie' }, ideal: '4', extensions: 7,
+  mecaniques: [{ id: '2012', nom: 'Enchères' }, { id: '2661', nom: 'Stop ou encore' }], themes: ['Fantastique'], ...over } });
+test('encart BGG v2 : rang général + catégorie, idéal à, pastille Extensions ✓ cliquable, mécaniques cliquables', () => {
+  const h = front2.bggCard(bggV2(), null);
+  for (const t of ['🏆 #453 · #341 stratégie', '👥 2–4 · idéal à 4', 'data-ext="155987"', 'Extensions ✓', 'data-meca="2661"', 'data-nom="Stop ou encore"', 'id="mecabox"', 'id="extbox"']) assert.ok(h.includes(t), t);
+  const sans = front2.bggCard(bggV2({ extensions: 0, rang: null, ideal: null }), null);
+  assert.ok(!sans.includes('Extensions ✓') && !sans.includes('🏆') && !sans.includes('idéal'));
+});
+test('bonne affaire : écart au neuf le moins cher (Esprit Jeu / Philibert), couleur selon l’écart', () => {
+  assert.equal(front2.prixNeuf({ espritjeu: { prix: 54 }, philibert: { prix: 57.9 } }), 54);
+  assert.equal(front2.prixNeuf({ espritjeu: null, philibert: { prix: null } }), null);
+  assert.ok(front2.dealTag(30, 54).includes('deal top') && front2.dealTag(30, 54).includes('−44 %'));
+  assert.ok(front2.dealTag(45, 54).includes('deal moy'));
+  assert.ok(front2.dealTag(60, 54).includes('deal bof') && front2.dealTag(60, 54).includes('+11 %'));
+  assert.equal(front2.dealTag(30, null), '');
+  const h = front2.okk(okkazeo([annonce(`${year}-01-02`, { prix: 20, cp: '75013' })]), '#', 54);
+  assert.ok(h.includes('−63 %') && h.includes('neuf dès 54 €'));
+});
+test('tuile boutique : prix neuf affiché', () => {
+  assert.ok(front2.tile('Philibert', 'red', { note: 4.7, avis: 3, titre: 'X', url: 'u', prix: 57.9 }, 5, 'avis', 's').includes('57,9 € neuf'));
+});
+test('comparateur : une colonne par jeu, meilleure note / plus petit prix en vert, valeur absente « – »', () => {
+  const a = { query: 'a', myludo: { titre: 'Abyss', note: 7.4 }, bgg: { note: 7.3, rang: 453, poids: 2.3 }, espritjeu: { prix: 32 }, okkazeo: { min: 30 } };
+  const c = { query: 'c', myludo: { titre: 'Clank!', note: 8.3 }, bgg: { note: 7.8, rang: 165 }, philibert: { prix: 45 }, okkazeo: { min: 20 } };
+  const h = front2.comparerHtml([a, c, null]);
+  assert.ok(h.includes('<th>Abyss</th>') && h.includes('<th>Clank!</th>'));
+  assert.ok(h.includes('<td class="best">7,8/10</td>') && h.includes('<td class="best">#165</td>') && h.includes('<td class="best">32 €</td>') && h.includes('<td class="best">20 €</td>'));
+  assert.ok(h.includes('<td>–</td>')); // poids de Clank absent
+  assert.ok(front2.comparerHtml([a]).includes('au moins 2 jeux'));
+});
+test('🔍 ouvre le jeu ET l’ajoute en onglet (le jeu d’origine aussi), ✕ ferme, bouton 🛒 vers le matchmaking', async () => {
+  const els = {};
+  const elx = sel => (els[sel] = els[sel] || { innerHTML: '', value: '', handlers: {}, addEventListener(t, h) { this.handlers[t] = h; }, scrollIntoView() {}, focus() {} });
+  const ctx = { document: { querySelector: elx }, location: { search: '' }, history: { replaceState() {} }, scrollTo() {}, URLSearchParams,
+    fetch: async u => { const m = String(u).match(/notes-jeux\?q=(.*)$/); return m ? { ok: true, json: async () => ({ query: decodeURIComponent(m[1]), myludo: { titre: 'T ' + decodeURIComponent(m[1]) }, liens: { bgg: '#' }, okkazeo: null }) } : { ok: false }; } };
+  const f = vm.runInNewContext(`${script}; ({ lancer, onglets: () => onglets, actif: () => actif })`, ctx);
+  f.lancer('abyss');
+  await new Promise(r => setTimeout(r, 10));
+  assert.equal(f.onglets().length, 0); // une seule recherche : pas d'onglets
+  const out = els['#out'];
+  const clic = cible => out.handlers.click({ target: { closest: s => cible(s) } });
+  clic(s => (s === '.go' ? { dataset: { q: 'ra' } } : null));
+  await new Promise(r => setTimeout(r, 10));
+  assert.deepEqual([...f.onglets()], ['abyss', 'ra']);
+  assert.equal(f.actif(), 1);
+  assert.ok(out.innerHTML.includes('<h1>T ra</h1>') && out.innerHTML.includes('data-x="0"') && out.innerHTML.includes('⚖ Comparer'));
+  assert.ok(out.innerHTML.includes('Retour à T abyss')); // le bouton Retour reste
+  assert.ok(els['#vers'].innerHTML.includes('🛒 2 jeux → matchmaking'));
+  els['#vers'].handlers.click({ target: { closest: s => (s === '#versPanier' ? {} : null) } });
+  assert.equal(els['#pj'].value, 'T abyss\nT ra');
+  clic(s => (s === '[data-x]' ? { dataset: { x: '1' } } : null));
+  await new Promise(r => setTimeout(r, 10));
+  assert.deepEqual([...f.onglets()], ['abyss']);
+  assert.ok(out.innerHTML.includes('<h1>T abyss</h1>'));
 });

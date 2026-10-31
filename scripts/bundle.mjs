@@ -7,6 +7,7 @@ const LIBS = {
   'bgg-fiche': ['lib/match.js', 'lib/bgg-fr.js', 'lib/bgg.js'],
   sources: ['lib/match.js', 'lib/jsonld.js', 'lib/okkazeo.js', 'lib/sites.js', 'lib/myludo.js', 'lib/bgg-fr.js', 'lib/bgg.js'],
   panier: ['lib/match.js', 'lib/sites.js', 'lib/panier.js'],
+  outils: ['lib/match.js', 'lib/sites.js', 'lib/myludo.js', 'lib/bgg-fr.js', 'lib/bgg.js', 'lib/outils.js'],
 };
 const name = process.argv[2];
 if (!LIBS[name]) { console.error('Nodes : ' + Object.keys(LIBS).join(', ')); process.exit(1); }

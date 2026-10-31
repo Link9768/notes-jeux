@@ -56,10 +56,37 @@ a{color:var(--acc)}
 .ml footer{padding:10px;text-align:center;border-top:1px solid var(--line)}
 .ml.bgg{border-color:var(--bgg)}
 .ml.bgg header{background:var(--bgg)}
+button.chip{border:0;color:var(--txt);font:inherit;font-size:12px;cursor:pointer}
+button.chip:hover,button.chip.on{background:var(--bgg);color:#fff}
+.bga.ext{border:0;font-family:inherit;cursor:pointer}
+.box{margin-top:8px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--bg)}
+.box:empty{display:none}
+.box h4{margin:0 0 4px;font-size:12px;color:var(--mut);font-weight:600}
+.raison{font-size:11px;color:var(--mut);padding:0 0 6px}
+.depli{width:100%;text-align:left;background:transparent;color:var(--txt);border:0;padding:0;font-size:11px;text-transform:uppercase;letter-spacing:.05em;font-weight:600;cursor:pointer}
+.depli:hover{color:var(--acc)}
+.onglet-g{display:inline-flex;align-items:center;border:1px solid var(--line);border-radius:999px;background:var(--card);white-space:nowrap}
+.onglet-g.on{background:var(--acc);border-color:var(--acc)}
+.onglet-g .onglet{border:0;background:transparent;padding-right:4px}
+.onglet-g.on .onglet{color:#fff}
+.onglet-g .x{border:0;background:transparent;color:var(--mut);padding:4px 10px 4px 2px;font-size:12px;cursor:pointer}
+.onglet-g.on .x{color:#fff}
+.outils-r{display:flex;gap:8px;margin:-8px 0 14px;min-height:0}
+.petit{padding:5px 12px;border:1px solid var(--line);border-radius:999px;background:var(--card);color:var(--txt);font-size:12px;font-weight:600}
+.cam{padding:0 12px;background:var(--card);border:1px solid var(--line);font-size:18px}
+.deal{font-size:10px;padding:1px 6px;border-radius:10px;margin-left:4px;font-weight:700}
+.deal.top{background:#34c75933;color:var(--ok)}
+.deal.moy{background:#ff9f0a33;color:#ff9f0a}
+.deal.bof{background:var(--line);color:var(--mut)}
+.comp{width:100%;border-collapse:collapse;font-size:13px}
+.compwrap{overflow-x:auto;background:var(--card);border:1px solid var(--line);border-radius:12px}
+.comp th,.comp td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
+.comp th{font-size:11px;color:var(--mut);font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+.comp td.best{color:var(--ok);font-weight:700}
 .okk{border:2px solid var(--okk);border-radius:12px;overflow:hidden;margin-top:14px}
 .okk header{background:var(--okk);color:#fff;padding:10px 12px}
 .okk header b{font-size:15px}
-.ann{display:grid;grid-template-columns:60px 1fr auto;gap:8px;padding:9px 12px;border-bottom:1px solid var(--line);align-items:center}
+.ann{display:grid;grid-template-columns:minmax(60px,auto) 1fr auto;gap:8px;padding:9px 12px;border-bottom:1px solid var(--line);align-items:center}
 .tag{font-size:10px;padding:1px 6px;border-radius:10px;background:var(--line);color:var(--mut);margin-left:4px}
 .tag.ok{background:#34c75933;color:var(--ok)}
 .okk footer{padding:10px;text-align:center}
@@ -78,12 +105,13 @@ a{color:var(--acc)}
 .skel{height:14px;border-radius:6px;margin:8px 0;background:linear-gradient(90deg,var(--line),#3a3a42,var(--line));background-size:200% 100%;animation:sk 1.2s infinite}
 @keyframes sk{to{background-position:-200% 0}}
 @media (prefers-reduced-motion:reduce){.skel{animation:none}}
-@media (max-width:760px){.panier form{flex-direction:column;align-items:stretch}.tiles{grid-template-columns:repeat(2,1fr)}.tile{padding:8px}.big{font-size:20px}.head img{width:44px;height:44px}.ann{grid-template-columns:52px 1fr auto}}
+@media (max-width:760px){.panier form{flex-direction:column;align-items:stretch}.tiles{grid-template-columns:repeat(2,1fr)}.tile{padding:8px}.big{font-size:20px}.head img{width:44px;height:44px}.ann{grid-template-columns:minmax(52px,auto) 1fr auto}}
 </style>
 </head>
 <body>
 <main>
-  <form id="f"><input id="q" aria-label="Nom du jeu" placeholder="Un jeu, ou jusqu'à 8 séparés par des virgules" autocomplete="off" enterkeyhint="search"><button>Rechercher</button></form>
+  <form id="f"><input id="q" list="sugg" aria-label="Nom du jeu" placeholder="Un jeu, ou plusieurs séparés par des virgules" autocomplete="off" enterkeyhint="search"><datalist id="sugg"></datalist><button type="button" class="cam" id="camb" title="Scanner un code-barres" aria-label="Scanner un code-barres">📷</button><input type="file" id="cam" accept="image/*" capture="environment" hidden><button>Rechercher</button></form>
+  <div class="outils-r" id="vers"></div>
   <div id="out" aria-live="polite"></div>
   <section class="panier">
     <header><b>Matchmaking Okkazeo</b><span>vendeurs qui ont plusieurs jeux de ta liste</span></header>
@@ -111,15 +139,17 @@ function tile(name, color, d, scale, unit, searchUrl) {
   const val = d.note == null
     ? `<div class="na">pas encore d'avis</div>`
     : `<div class="big">${fr(d.note)}<small>/${scale}</small></div><div class="mut">${d.avis ?? d.votes ?? '?'} ${unit}</div>`;
-  // Durée et poids (BGG) : ⚖ = complexité sur 5.
-  const infos = [d.duree && `⏱ ${esc(d.duree)} min`, d.poids != null && `⚖ ${fr(d.poids)}/5`].filter(Boolean);
+  // Prix neuf (boutiques) ; durée et poids (⚖ = complexité sur 5) si la source les donne.
+  const infos = [d.prix != null && `${fr(d.prix)} € neuf`, d.duree && `⏱ ${esc(d.duree)} min`, d.poids != null && `⚖ ${fr(d.poids)}/5`].filter(Boolean);
   const plus = infos.length ? `<div class="mut" style="margin-top:4px">${infos.join(' · ')}</div>` : '';
   return `<div class="tile">${src}${val}${plus}<div class="match">« ${esc(d.titre)} » ${ext(d.url, '↗')}</div></div>`;
 }
 
 // Une ligne de jeu (semblable ou du même auteur) : lien vers sa fiche, année, bouton 🔍 qui lance sa recherche, note si connue.
+// go: false → pas de 🔍 (extensions : on ne cherche pas une extension seule).
 function ligneJeu(s) {
-  return `<div class="sim"><span>${ext(s.url, esc(s.titre))} <span class="mut">${s.annee ?? ''}</span><button type="button" class="go" data-q="${esc(s.titre)}" title="Chercher ${esc(s.titre)}" aria-label="Chercher ${esc(s.titre)}">🔍</button></span><span>${s.note != null ? `<b>${fr(s.note)}</b><span class="mut">/10</span>` : ''}</span></div>`;
+  const go = s.go === false ? '' : `<button type="button" class="go" data-q="${esc(s.titre)}" title="Chercher ${esc(s.titre)}" aria-label="Chercher ${esc(s.titre)}">🔍</button>`;
+  return `<div class="sim"><span>${ext(s.url, esc(s.titre))} <span class="mut">${s.annee ?? ''}</span>${go}</span><span>${s.note != null ? `<b>${fr(s.note)}</b><span class="mut">/10</span>` : ''}</span></div>`;
 }
 
 // Encart « Semblable à » : recommandations des joueurs BGG (note BGG sur 10).
@@ -127,6 +157,44 @@ function semblables(d) {
   const s = d && d.similaires;
   if (!s || !s.length) return '';
   return `<section class="aut"><h3>Semblable à · recommandations BGG</h3><div class="autjeux">${s.map(ligneJeu).join('')}</div></section>`;
+}
+
+// Encart dépliable « Jumeaux » : 1 ou 2 jeux quasi identiques (calcul du workflow Outils, au clic).
+function jumeauxBloc(d) {
+  const id = d && d.bgg && d.bgg.id;
+  return id ? `<section class="aut"><button type="button" class="depli" data-jum="${esc(id)}" aria-expanded="false">🎯 Jumeaux · les jeux les plus proches ▸</button><div class="box" id="jumbox"></div></section>` : '';
+}
+
+// Outils chargés au clic (workflow « Notes Jeux — Outils ») : réponses gardées le temps de la page.
+const API_OUTILS = 'https://n8n.srv1250642.hstgr.cloud/webhook/notes-jeux-outils';
+const OUTILS = new Map();
+function outil(params) {
+  const url = API_OUTILS + '?' + Object.entries(params).map(([k, v]) => k + '=' + encodeURIComponent(v)).join('&');
+  if (!OUTILS.has(url)) {
+    OUTILS.set(url, fetch(url).then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then(j => { if (j.erreur) throw new Error(j.erreur); return j; })
+      .catch(e => { OUTILS.delete(url); throw e; }));
+  }
+  return OUTILS.get(url);
+}
+const chargeBox = '<div class="skel"></div><div class="skel" style="width:70%"></div>';
+const listeBox = (titre, jeux, vide) => (jeux.length ? `<h4>${titre}</h4>${jeux.map(ligneJeu).join('')}` : `<p class="na">${vide}</p>`);
+function jumeauxHtml(j) {
+  if (!j.length) return '<p class="na">Aucun jeu assez proche trouvé.</p>';
+  return j.map(x => `${ligneJeu(x)}<div class="raison">En commun : ${x.raison.map(esc).join(', ')}</div>`).join('');
+}
+function extensionsHtml(e) {
+  return listeBox(`${e.length} extension${e.length > 1 ? 's' : ''} · note BGG`, e.map(x => ({ ...x, go: false })), 'Aucune extension notée.');
+}
+// Dépliable : 1er clic charge et ouvre, clic suivant referme.
+async function deplier(bouton, boite, charge, html) {
+  const ouvert = bouton.getAttribute('aria-expanded') === 'true';
+  bouton.setAttribute('aria-expanded', String(!ouvert));
+  if (bouton.textContent.endsWith('▸') || bouton.textContent.endsWith('▾')) bouton.textContent = bouton.textContent.slice(0, -1) + (ouvert ? '▸' : '▾');
+  if (ouvert) { boite.innerHTML = ''; return; }
+  boite.innerHTML = chargeBox;
+  try { const r = await charge(); if (bouton.getAttribute('aria-expanded') === 'true') boite.innerHTML = html(r); }
+  catch (e) { boite.innerHTML = `<p class="na">Indisponible (${esc(e.message)}).</p>`; }
 }
 
 // Encart tout en bas : les jeux les plus connus du même auteur (voir CLAUDE.md).
@@ -148,13 +216,18 @@ function retour() {
 function bggCard(d, games) {
   const b = d.bgg, pied = `<footer>${liens(d, games)}</footer>`;
   if (!b) return `<section class="ml bgg"><header><b>BoardGameGeek</b><span>indisponible</span></header>${pied}</section>`;
-  const note = b.note == null ? `<span class="na">pas encore d'avis</span>` : `<span class="big">${fr(b.note)}<small>/10</small></span> <span class="mut">${b.votes} votes</span>`;
-  const facts = [b.duree && `⏱ ${esc(b.duree)} min`, b.joueurs && `👥 ${esc(b.joueurs)}`, b.poids != null && `⚖ ${fr(b.poids)}/5`].filter(Boolean).map(f => `<span>${f}</span>`).join('');
+  // Pastille « Extensions ✓ » (seulement s'il y en a) : un clic déplie la liste avec leurs notes.
+  const extB = b.extensions > 0 ? `<button type="button" class="bga oui ext" data-ext="${esc(b.id)}" aria-expanded="false" title="${b.extensions} extension(s) : voir leurs notes">Extensions ✓</button>` : '';
+  const note = b.note == null ? `<span class="na">pas encore d'avis</span>${extB}` : `<span class="big">${fr(b.note)}<small>/10</small></span> <span class="mut">${b.votes} votes</span>${extB}`;
+  const rang = b.rang ? `🏆 #${b.rang}${b.rangCat ? ` · #${b.rangCat.rang} ${esc(b.rangCat.nom)}` : ''}` : '';
+  const joueurs = b.joueurs && `👥 ${esc(b.joueurs)}${b.ideal ? ` · idéal à ${esc(b.ideal)}` : ''}`;
+  const facts = [rang, b.duree && `⏱ ${esc(b.duree)} min`, joueurs, b.poids != null && `⚖ ${fr(b.poids)}/5`].filter(Boolean).map(f => `<span>${f}</span>`).join('');
   const meca = b.mecaniques || [], th = b.themes || [];
+  // Mécanique cliquable : déplie les 20 meilleurs jeux BGG de cette mécanique.
   const style = meca.length || th.length
-    ? `<div class="chips">${meca.map(x => `<span class="chip">${esc(x)}</span>`).join('')}${th.map(x => `<span class="chip th">${esc(x)}</span>`).join('')}</div>`
+    ? `<div class="chips">${meca.map(x => (typeof x === 'string' ? `<span class="chip">${esc(x)}</span>` : `<button type="button" class="chip" data-meca="${esc(x.id)}" data-nom="${esc(x.nom)}" title="Meilleurs jeux : ${esc(x.nom)}">${esc(x.nom)}</button>`)).join('')}${th.map(x => `<span class="chip th">${esc(x)}</span>`).join('')}</div><div class="box" id="mecabox"></div>`
     : '<div class="na">non renseigné</div>';
-  return `<section class="ml bgg"><header><b>BoardGameGeek</b><span>${b.annee ? esc(b.annee) : ''}</span></header><div class="body"><div>${note}</div><div class="facts">${facts}</div><div><h3>Style de jeu</h3>${style}</div></div>${pied}</section>`;
+  return `<section class="ml bgg"><header><b>BoardGameGeek</b><span>${b.annee ? esc(b.annee) : ''}</span></header><div class="body"><div>${note}<div class="box" id="extbox"></div></div><div class="facts">${facts}</div><div><h3>Style de jeu</h3>${style}</div></div>${pied}</section>`;
 }
 
 // Board Game Arena : liste des jeux publics (lib/bga-games.json, régénérée par scripts/build-bga-list.mjs) chargée avec la page.
@@ -202,10 +275,22 @@ function liens(d, games) {
   return bggUrl ? ext(bggUrl, 'Ouvrir sur BoardGameGeek ↗') : ext(d.liens.bgg, 'Chercher sur BoardGameGeek ↗');
 }
 
-function okk(o, lien) {
+// Prix neuf de référence : le moins cher d'Esprit Jeu et Philibert (null si aucun).
+function prixNeuf(d) {
+  const p = [d && d.espritjeu && d.espritjeu.prix, d && d.philibert && d.philibert.prix].filter(x => x != null);
+  return p.length ? Math.min(...p) : null;
+}
+// Écart occasion / neuf : « −45 % » (vert ≤ −30 %, orange ≤ −10 %, gris sinon).
+function dealTag(prix, neuf) {
+  if (neuf == null || prix == null) return '';
+  const e = Math.round((prix / neuf - 1) * 100);
+  const cls = e <= -30 ? 'top' : e <= -10 ? 'moy' : 'bof';
+  return `<span class="deal ${cls}" title="vs ${fr(neuf)} € neuf">${e > 0 ? '+' : e < 0 ? '−' : ''}${Math.abs(e)} %</span>`;
+}
+function okk(o, lien, neuf = null) {
   if (!o) return `<section class="okk"><header><b>Okkazeo</b><div>indisponible</div></header><footer>${ext(lien, 'Chercher sur Okkazeo ↗')}</footer></section>`;
-  const rows = o.annonces.map(a => `<div class="ann"><b>${fr(a.prix)} €</b><span>${esc(a.etat)}${a.bonneAffaire ? '<span class="tag ok">bonne affaire</span>' : ''}${a.extensions ? '<span class="tag">+ ext.</span>' : ''}<br><span class="mut">${esc(a.ville ?? '')}</span></span><span class="mut">${fmtDate(a.date)}</span></div>`).join('');
-  const prix = o.total && o.min != null ? ` · ${fr(o.min)}–${fr(o.max)} €` : '';
+  const rows = o.annonces.map(a => `<div class="ann"><b>${fr(a.prix)} €${dealTag(a.prix, neuf)}</b><span>${esc(a.etat)}${a.bonneAffaire ? '<span class="tag ok">bonne affaire</span>' : ''}${a.extensions ? '<span class="tag">+ ext.</span>' : ''}<br><span class="mut">${esc(a.ville ?? '')}</span></span><span class="mut">${fmtDate(a.date)}</span></div>`).join('');
+  const prix = (o.total && o.min != null ? ` · ${fr(o.min)}–${fr(o.max)} €` : '') + (neuf != null ? ` · neuf dès ${fr(neuf)} €` : '');
   const pied = o.annonces.length ? 'Ouvrir sur Okkazeo ↗' : o.total ? `Voir les ${o.total} annonces France ↗` : 'Ouvrir sur Okkazeo ↗';
   return `<section class="okk"><header><b>Okkazeo · ${o.annonces.length} près de Paris</b><div>${o.total} en France${prix}</div></header>${rows}<footer>${ext(o.url, pied)}</footer></section>`;
 }
@@ -218,7 +303,46 @@ function render(d, games) {
     : `<div class="head"><div><h1>${esc(d.query)}</h1><div class="mut">${bgaBadge(d, games)}</div></div></div>`;
   // Tuile MyLudo minimaliste, comme les boutiques : note, nombre de notes, titre retenu (durée et poids sont dans l'encart BGG).
   const tiles = `<div class="tiles">${tile('Esprit Jeu', 'var(--ej)', d.espritjeu, 5, 'avis', L.espritjeu)}${tile('Philibert', 'var(--ph)', d.philibert, 5, 'avis', L.philibert)}${tile('MyLudo', 'var(--ml)', m && { note: m.note, avis: m.avis, titre: m.titre, url: m.url }, 10, 'notes', L.myludo || '#')}</div>`;
-  $('#out').innerHTML = `${retour()}${ongletsHtml()}${head}${tiles}${bggCard(d, games)}${semblables(d)}${auteur(m)}${okk(d.okkazeo, L.okkazeo)}`;
+  $('#out').innerHTML = `${retour()}${ongletsHtml()}${head}${tiles}${bggCard(d, games)}${semblables(d)}${jumeauxBloc(d)}${auteur(m)}${okk(d.okkazeo, L.okkazeo, prixNeuf(d))}`;
+  majVers();
+}
+
+// Comparateur : une colonne par jeu ouvert déjà chargé ; meilleure valeur en vert sur les lignes où « mieux » a un sens.
+function comparerHtml(liste) {
+  const ds = liste.filter(Boolean);
+  if (ds.length < 2) return '<p class="na">Il faut au moins 2 jeux chargés pour comparer.</p>';
+  const b = d => d.bgg || {};
+  const occ = d => (d.okkazeo && d.okkazeo.min != null ? d.okkazeo.min : null);
+  const ecart = d => { const n = prixNeuf(d), o = occ(d); return n != null && o != null ? Math.round((o / n - 1) * 100) : null; };
+  const lignes = [
+    ['Note BGG', d => b(d).note, 'max', v => fr(v) + '/10'],
+    ['Note MyLudo', d => d.myludo && d.myludo.note, 'max', v => fr(v) + '/10'],
+    ['Rang BGG', d => b(d).rang, 'min', v => '#' + v],
+    ['Durée', d => b(d).duree, null, v => esc(v) + ' min'],
+    ['Poids', d => b(d).poids, null, v => fr(v) + '/5'],
+    ['Joueurs', d => b(d).joueurs, null, esc],
+    ['Idéal à', d => b(d).ideal, null, esc],
+    ['Prix neuf', prixNeuf, 'min', v => fr(v) + ' €'],
+    ['Occasion (min)', occ, 'min', v => fr(v) + ' €'],
+    ['Écart occasion', ecart, 'min', v => (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v) + ' %'],
+  ];
+  const tete = `<tr><th></th>${ds.map(d => `<th>${esc((d.myludo && d.myludo.titre) || b(d).titre || d.query)}</th>`).join('')}</tr>`;
+  const corps = lignes.map(([nom, f, sens, fmt]) => {
+    const vals = ds.map(d => { const v = f(d); return v == null || v === '' ? null : v; });
+    const nums = vals.filter(v => typeof v === 'number');
+    const best = sens && nums.length > 1 ? (sens === 'max' ? Math.max(...nums) : Math.min(...nums)) : null;
+    return `<tr><th>${nom}</th>${vals.map(v => `<td${v != null && v === best ? ' class="best"' : ''}>${v == null ? '–' : fmt(v)}</td>`).join('')}</tr>`;
+  }).join('');
+  return `<div class="compwrap"><table class="comp">${tete}${corps}</table></div>`;
+}
+
+// Petit bouton sous la recherche : bascule les jeux ouverts (onglets) dans le matchmaking Okkazeo.
+function titresOuverts() {
+  return onglets.map(q => { const d = enCache(q); return (d && d.myludo && d.myludo.titre) || q; });
+}
+function majVers() {
+  const v = $('#vers');
+  if (v) v.innerHTML = onglets.length >= 2 ? `<button type="button" class="petit" id="versPanier">🛒 ${onglets.length} jeux → matchmaking</button>` : '';
 }
 
 function skeleton() {
@@ -252,22 +376,46 @@ function charger(q) {
 
 // Recherche de plusieurs jeux (séparés par des virgules) : un onglet par jeu, tous chargés en parallèle,
 // navigation libre d'un onglet à l'autre sans rechargement.
+// Un 🔍 (semblables, même auteur, jumeaux, top d'une mécanique) ouvre le jeu ET l'ajoute en onglet ; ✕ ferme un onglet.
+const MAX_ONGLETS = 15;
 let onglets = [];
 let actif = -1;
+let comparant = false; // onglet « ⚖ Comparer » affiché
 let affiche = null; // résultat affiché (null pendant un chargement)
 function ongletsHtml() {
   if (onglets.length < 2) return '';
+  const charges = onglets.filter(q => enCache(q)).length;
   return `<nav class="onglets">${onglets.map((q, i) => {
     const d = enCache(q);
     const nom = (d && d.myludo && d.myludo.titre) || q;
     const etat = d ? '' : ECHECS.has(cleDe(q)) ? ' ⚠' : ' …';
-    return `<button type="button" class="onglet${i === actif ? ' on' : ''}${d ? '' : ' att'}" data-i="${i}">${esc(nom)}${etat}</button>`;
-  }).join('')}</nav>`;
+    return `<span class="onglet-g${i === actif && !comparant ? ' on' : ''}"><button type="button" class="onglet${d ? '' : ' att'}" data-i="${i}">${esc(nom)}${etat}</button><button type="button" class="x" data-x="${i}" aria-label="Fermer ${esc(nom)}" title="Fermer">✕</button></span>`;
+  }).join('')}${charges >= 2 ? `<button type="button" class="onglet${comparant ? ' on' : ''}" data-comp="1">⚖ Comparer</button>` : ''}</nav>`;
+}
+function afficherComparaison() {
+  comparant = true;
+  affiche = null;
+  $('#out').innerHTML = `${ongletsHtml()}${comparerHtml(onglets.map(enCache))}`;
+  majVers();
+}
+async function fermer(i) {
+  const etaitActif = i === actif;
+  onglets.splice(i, 1);
+  if (i < actif) actif--;
+  if (comparant) {
+    if (onglets.filter(q => enCache(q)).length >= 2) return afficherComparaison();
+    comparant = false;
+    actif = Math.min(Math.max(actif, 0), onglets.length - 1);
+    return search(onglets[actif]);
+  }
+  if (etaitActif) { actif = Math.min(i, onglets.length - 1); if (actif >= 0) return search(onglets[actif]); }
+  if (affiche) render(affiche, await BGA); else majVers();
 }
 // Un onglet vient de finir de charger : on met à jour les étiquettes de la barre sans changer ce qui est affiché.
 async function majOnglets() {
   const games = await BGA;
-  if (affiche) render(affiche, games);
+  if (comparant) afficherComparaison();
+  else if (affiche) render(affiche, games);
 }
 
 async function search(q) {
@@ -282,18 +430,25 @@ async function search(q) {
   }
 }
 
-// garder : recherche lancée depuis un 🔍 → on mémorise l'écran actuel pour pouvoir y revenir (les onglets restent) ;
-// sinon nouvelle recherche, pile vidée, et une liste « A, B, C » ouvre un onglet par jeu (8 au plus).
+// garder : recherche lancée depuis un 🔍 → on mémorise l'écran actuel pour pouvoir y revenir, et le jeu est ajouté
+// aux onglets (le jeu d'où l'on vient en devient un s'il n'y en avait pas) ;
+// sinon nouvelle recherche, pile vidée, et une liste « A, B, C » ouvre un onglet par jeu (15 au plus).
 function lancer(q, garder) {
   if (!q) return;
+  comparant = false;
   if (garder && courant) pile.push(courant); else if (!garder) pile.length = 0;
-  if (garder) actif = -1;
-  else {
+  if (garder) {
+    if (!onglets.length && courant) onglets = [courant.query];
+    let i = onglets.findIndex(x => cleDe(x) === cleDe(q));
+    if (i < 0 && onglets.length < MAX_ONGLETS) i = onglets.push(q) - 1;
+    actif = i;
+  } else {
     const vus = new Set();
-    onglets = q.split(/[,;]/).map(x => x.trim()).filter(x => x && !vus.has(cleDe(x)) && vus.add(cleDe(x))).slice(0, 8);
+    onglets = q.split(/[,;]/).map(x => x.trim()).filter(x => x && !vus.has(cleDe(x)) && vus.add(cleDe(x))).slice(0, MAX_ONGLETS);
     if (onglets.length < 2) onglets = [];
     actif = onglets.length ? 0 : -1;
   }
+  majVers();
   if (!garder) $('#q').value = q;
   history.replaceState(null, '', '?q=' + encodeURIComponent(garder ? q : $('#q').value));
   if (onglets.length && !garder) {
@@ -309,17 +464,85 @@ $('#f').addEventListener('submit', e => {
 
 // Raccourci 🔍 à côté d'un jeu semblable : lance la recherche de ce jeu sans retaper son nom.
 $('#out').addEventListener('click', e => {
-  const b = e.target.closest && e.target.closest('.go');
+  const t = s => e.target.closest && e.target.closest(s);
+  const b = t('.go');
   if (b) { lancer(b.dataset.q, true); scrollTo(0, 0); return; }
-  const o = e.target.closest && e.target.closest('.onglet');
-  if (o) { actif = Number(o.dataset.i); pile.length = 0; search(onglets[actif]); return; }
-  if (e.target.closest && e.target.closest('.back')) revenir();
+  const x = t('[data-x]');
+  if (x) { fermer(Number(x.dataset.x)); return; }
+  if (t('[data-comp]')) { afficherComparaison(); return; }
+  const o = t('.onglet');
+  if (o) { actif = Number(o.dataset.i); comparant = false; pile.length = 0; search(onglets[actif]); return; }
+  if (t('.back')) { revenir(); return; }
+  const ex = t('[data-ext]');
+  if (ex) { deplier(ex, $('#extbox'), () => outil({ op: 'ext', id: ex.dataset.ext }).then(r => r.extensions), extensionsHtml); return; }
+  const j = t('[data-jum]');
+  if (j) { deplier(j, $('#jumbox'), () => outil({ op: 'jumeaux', id: j.dataset.jum }).then(r => r.jumeaux), jumeauxHtml); return; }
+  const m = t('[data-meca]');
+  if (m) {
+    // Une seule mécanique dépliée à la fois ; re-cliquer la même referme.
+    const box = $('#mecabox');
+    const ouvert = m.classList.contains('on');
+    $('#out').querySelectorAll('[data-meca].on').forEach(c => c.classList.remove('on'));
+    if (ouvert) { box.innerHTML = ''; return; }
+    m.classList.add('on');
+    box.innerHTML = chargeBox;
+    outil({ op: 'meca', id: m.dataset.meca })
+      .then(r => { if (m.classList.contains('on')) box.innerHTML = listeBox(`Top ${r.jeux.length} BGG · ${esc(m.dataset.nom)}`, r.jeux, 'Aucun jeu classé.'); })
+      .catch(err => { if (m.classList.contains('on')) box.innerHTML = `<p class="na">Indisponible (${esc(err.message)}).</p>`; });
+  }
+});
+
+// 🛒 : les jeux ouverts partent dans la case du matchmaking (titres MyLudo : Okkazeo ne cherche que le titre exact).
+$('#vers').addEventListener('click', e => {
+  if (!(e.target.closest && e.target.closest('#versPanier'))) return;
+  $('#pj').value = titresOuverts().join('\n');
+  $('.panier').scrollIntoView({ behavior: 'smooth' });
+  $('#pj').focus();
+});
+
+// Saisie semi-automatique (titres MyLudo), à partir de 3 lettres, pas pendant une liste « A, B ».
+let suggT = null;
+$('#q').addEventListener('input', () => {
+  clearTimeout(suggT);
+  const v = $('#q').value.trim();
+  if (v.length < 3 || /[,;]/.test(v)) return;
+  suggT = setTimeout(() => outil({ op: 'suggest', q: v })
+    .then(r => { $('#sugg').innerHTML = r.titres.map(x => `<option value="${esc(x)}">`).join(''); })
+    .catch(() => {}), 300);
+});
+
+// 📷 : photo du code-barres → EAN (BarcodeDetector si le navigateur l'a, sinon ZXing chargé à la demande) → titre → recherche.
+$('#camb').addEventListener('click', () => $('#cam').click());
+async function lireCode(fichier) {
+  if ('BarcodeDetector' in window) {
+    const r = await new BarcodeDetector({ formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e'] }).detect(await createImageBitmap(fichier));
+    if (r[0]) return r[0].rawValue;
+  }
+  if (!window.ZXing) await new Promise((ok, ko) => { const s = document.createElement('script'); s.src = 'https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js'; s.onload = ok; s.onerror = () => ko(new Error('lecteur indisponible')); document.head.appendChild(s); });
+  const url = URL.createObjectURL(fichier);
+  try { return (await new ZXing.BrowserMultiFormatReader().decodeFromImageUrl(url)).getText(); } finally { URL.revokeObjectURL(url); }
+}
+$('#cam').addEventListener('change', async () => {
+  const f = $('#cam').files[0];
+  $('#cam').value = '';
+  if (!f) return;
+  $('#out').innerHTML = '<p class="mut">Lecture du code-barres…</p>';
+  try {
+    const code = await lireCode(f).catch(() => null);
+    if (!code) throw new Error('code-barres illisible, reprends la photo plus près et bien nette');
+    const r = await outil({ op: 'ean', code });
+    if (!r.titre) throw new Error(`aucun jeu trouvé pour le code ${code}`);
+    lancer(r.titre);
+  } catch (err) {
+    $('#out').innerHTML = `<p class="na">${esc(err.message)}</p>`;
+  }
 });
 
 async function revenir() {
   const prev = pile.pop();
   if (!prev) return;
   seq++; // annule une recherche encore en cours
+  comparant = false;
   courant = prev;
   actif = onglets.findIndex(x => cleDe(x) === cleDe(prev.query));
   if (!onglets.length) { $('#q').value = prev.query; history.replaceState(null, '', '?q=' + encodeURIComponent(prev.query)); }

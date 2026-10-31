@@ -34,8 +34,9 @@ const get = async (url, headers = UA, charset) => {
 async function boutique(searchUrl, parseSearch, charset) {
   const p = pickProduct(q, parseSearch(await get(searchUrl, UA, charset)));
   if (!p) return null;
-  const r = ratingOf(findProduct(extractJsonLd(await get(p.url, UA, charset))));
-  return { note: r ? r.note : (p.note ?? null), avis: r ? r.avis : null, titre: p.title, url: p.url };
+  const prod = findProduct(extractJsonLd(await get(p.url, UA, charset)));
+  const r = ratingOf(prod);
+  return { note: r ? r.note : (p.note ?? null), avis: r ? r.avis : null, titre: p.title, url: p.url, prix: priceOf(prod) };
 }
 
 // Okkazeo sépare un même jeu en plusieurs éditions (même titre, ids différents) : on additionne celles qui ont des annonces.
