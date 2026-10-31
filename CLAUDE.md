@@ -81,6 +81,12 @@ Plusieurs jeux dans la barre (« Abyss, Clank, Azul », virgule ou point-virgule
 - **Onglets** : un 🔍 ouvre le jeu ET l'ajoute en onglet (le jeu d'origine aussi) ; ✕ par onglet ; 15 max ; onglet « ⚖ Comparer » dès 2 jeux chargés ; bouton `🛒 N jeux → matchmaking` sous la recherche (titres MyLudo). « ← Retour à » conservé.
 - Piège vu en écrivant le node : dans une `async function` déclarée, `this` n'est pas le contexte n8n → `this.helpers` plante. Passer par une fonction fléchée définie au niveau du node (`req`, `reqLatin1`).
 
+## Listes et liens (2026-10-31)
+
+- **Mes listes** : « À essayer », « À acheter », « À tester sur BGA » (fixes) + listes créées. `localStorage` clé `notesJeux.listes` = **propres à l'appareil/navigateur** (pas de synchro). « ＋ Liste » sous le titre du jeu (pastilles = ajout/retrait, titre stocké = titre MyLudo), « + » à côté de « BGA ✓ » → « À tester sur BGA ». Écran `📋 Mes listes` (bouton sous la recherche) : jeux cliquables (= 🔍), ✕, 🛒 → matchmaking, suppression des listes créées.
+- **Extensions** : le titre d'une extension ouvre sa page de jeu dans l'appli (recherche par titre BGG anglais, vérifié : « Abyss: Kraken » trouvé par BGG, MyLudo, Philibert, Esprit Jeu).
+- **Liens externes dans le même onglet** (plus de `target="_blank"`, qui déclenchait « pop-up bloqué » sur mobile).
+
 ## Sécurité
 
 Les webhooks sont publics. La recherche déclenche environ 8 requêtes vers des sites tiers par appel (2 par boutique + 2 BGG) : acceptable pour un usage perso. Si besoin, ajouter une clé simple dans l'URL et la vérifier dans un node du workflow.

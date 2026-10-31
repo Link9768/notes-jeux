@@ -274,3 +274,45 @@ test('🔍 ouvre le jeu ET l’ajoute en onglet (le jeu d’origine aussi), ✕ 
   assert.deepEqual([...f.onglets()], ['abyss']);
   assert.ok(out.innerHTML.includes('<h1>T abyss</h1>'));
 });
+
+// ---- extensions ouvertes dans l'appli, liens sans pop-up, listes
+const front3 = vm.runInNewContext(`${script}; ({ extensionsHtml, bgaBadge, okk })`, {
+  document: { querySelector: el }, location: { search: '' }, history: {}, fetch: async () => { throw new Error('pas de réseau'); }, URLSearchParams,
+});
+test('extension : son titre ouvre sa page de jeu dans l’appli (data-q), pas BoardGameGeek', () => {
+  const h = front3.extensionsHtml([{ titre: 'Abyss: Kraken', annee: 2015, url: 'https://boardgamegeek.com/boardgame/1', note: 7.4 }]);
+  assert.ok(h.includes('class="lien" data-q="Abyss: Kraken"') && !h.includes('href='), h);
+});
+test('liens externes dans le même onglet (pas de pop-up) ; pastille BGA suivie du + « À tester sur BGA »', () => {
+  assert.ok(!front3.okk(okkazeo([]), '#').includes('_blank'));
+  const h = front3.bgaBadge(lien(), games);
+  assert.ok(!h.includes('_blank') && h.includes('class="bga plus"') && h.includes('data-liste="À tester sur BGA"'));
+  assert.ok(!front3.bgaBadge(lien({ query: 'clank', myludo: { titre: 'Clank!' } }), games).includes('plus'));
+});
+test('listes : ajout depuis le jeu, gardées dans localStorage, écran « Mes listes », création, retrait', async () => {
+  const stock = {};
+  const els = {};
+  const elx = sel => (els[sel] = els[sel] || { innerHTML: '', value: '', handlers: {}, addEventListener(t, h) { this.handlers[t] = h; }, querySelectorAll: () => [], scrollIntoView() {}, focus() {} });
+  const ctx = { document: { querySelector: elx }, location: { search: '' }, history: { replaceState() {} }, scrollTo() {}, URLSearchParams,
+    localStorage: { getItem: k => stock[k] ?? null, setItem: (k, v) => { stock[k] = v; } },
+    fetch: async u => (String(u).includes('notes-jeux?q=') ? { ok: true, json: async () => ({ query: 'abyss', myludo: { titre: 'Abyss' }, liens: { bgg: '#' }, okkazeo: null }) } : { ok: false }) };
+  const f = vm.runInNewContext(`${script}; ({ lancer, listes })`, ctx);
+  assert.deepEqual([...f.listes.map(l => l.nom)], ['À essayer', 'À acheter', 'À tester sur BGA']);
+  f.lancer('abyss');
+  await new Promise(r => setTimeout(r, 10));
+  const out = els['#out'];
+  assert.ok(out.innerHTML.includes('＋ Liste') && out.innerHTML.includes('data-liste="À acheter"'));
+  const clic = cible => out.handlers.click({ target: { closest: s => cible(s) } });
+  clic(s => (s === '[data-liste]' ? { dataset: { liste: 'À acheter' } } : null));
+  assert.deepEqual(JSON.parse(stock['notesJeux.listes']).find(l => l.nom === 'À acheter').jeux, ['Abyss']);
+  assert.ok(els['#vers'].innerHTML.includes('📋 Mes listes (1)'));
+  els['#vers'].handlers.click({ target: { closest: s => (s === '#versListes' ? {} : null) } });
+  assert.ok(out.innerHTML.includes('📋 Mes listes') && out.innerHTML.includes('data-q="Abyss"') && out.innerHTML.includes('Retour à Abyss'));
+  clic(s => (s === '[data-nvl]' ? { closest: () => ({ querySelector: () => ({ value: ' Soirées ' }) }) } : null));
+  assert.ok(out.innerHTML.includes('Soirées · 0') && out.innerHTML.includes('data-suppr="Soirées"'));
+  assert.ok(!out.innerHTML.includes('data-suppr="À acheter"')); // listes fixes non supprimables
+  clic(s => (s === '[data-retire]' ? { dataset: { retire: 'À acheter', titre: 'Abyss' } } : null));
+  assert.ok(out.innerHTML.includes('À acheter · 0'));
+  const f2 = vm.runInNewContext(`${script}; ({ listes })`, { ...ctx, document: { querySelector: el } });
+  assert.ok(f2.listes.some(l => l.nom === 'Soirées')); // relue au chargement suivant
+});

@@ -83,6 +83,18 @@ button.chip:hover,button.chip.on{background:var(--bgg);color:#fff}
 .comp th,.comp td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
 .comp th{font-size:11px;color:var(--mut);font-weight:600;text-transform:uppercase;letter-spacing:.04em}
 .comp td.best{color:var(--ok);font-weight:700}
+.lien{background:none;border:0;padding:0;color:var(--acc);font:inherit;font-size:inherit;font-weight:400;cursor:pointer;text-align:left}
+.bga.plus{border:0;font-family:inherit;cursor:pointer;background:var(--line);color:var(--txt);margin-left:3px}
+.bga.plus.on{background:#34c75933;color:var(--ok)}
+.addl{margin-top:6px}
+.addl summary{cursor:pointer;font-size:12px;color:var(--mut);display:inline-block}
+.addl .chips{margin-top:6px}
+.nvlw{display:flex;gap:6px;margin-top:8px}
+.nvlw input{padding:6px 10px;font-size:14px;flex:0 1 220px}
+.sim .x{border:0;background:transparent;color:var(--mut);padding:0 4px;font-size:13px;cursor:pointer}
+.actl{display:flex;gap:8px;margin-top:8px}
+.actl:empty{display:none}
+.titre-l{font-size:18px;margin:0 0 4px}
 .okk{border:2px solid var(--okk);border-radius:12px;overflow:hidden;margin-top:14px}
 .okk header{background:var(--okk);color:#fff;padding:10px 12px}
 .okk header b{font-size:15px}
@@ -130,7 +142,8 @@ const fmtDate = iso => {
   const [y, m, d] = iso.split('-');
   return y === String(new Date().getFullYear()) ? `${d}/${m}` : `${d}/${m}/${y}`;
 };
-const ext = (url, txt) => `<a href="${esc(url)}" target="_blank" rel="noopener">${txt}</a>`;
+// Liens externes ouverts dans le même onglet (target="_blank" déclenchait « pop-up bloqué » sur mobile) ; le retour du navigateur ramène ici.
+const ext = (url, txt) => `<a href="${esc(url)}" rel="noopener">${txt}</a>`;
 let seq = 0;
 
 function tile(name, color, d, scale, unit, searchUrl) {
@@ -146,10 +159,11 @@ function tile(name, color, d, scale, unit, searchUrl) {
 }
 
 // Une ligne de jeu (semblable ou du même auteur) : lien vers sa fiche, année, bouton 🔍 qui lance sa recherche, note si connue.
-// go: false → pas de 🔍 (extensions : on ne cherche pas une extension seule).
+// interne: true → le titre ouvre le jeu dans l'appli (comme 🔍), pas sa page BGG (extensions).
 function ligneJeu(s) {
-  const go = s.go === false ? '' : `<button type="button" class="go" data-q="${esc(s.titre)}" title="Chercher ${esc(s.titre)}" aria-label="Chercher ${esc(s.titre)}">🔍</button>`;
-  return `<div class="sim"><span>${ext(s.url, esc(s.titre))} <span class="mut">${s.annee ?? ''}</span>${go}</span><span>${s.note != null ? `<b>${fr(s.note)}</b><span class="mut">/10</span>` : ''}</span></div>`;
+  const go = s.interne ? '' : `<button type="button" class="go" data-q="${esc(s.titre)}" title="Chercher ${esc(s.titre)}" aria-label="Chercher ${esc(s.titre)}">🔍</button>`;
+  const titre = s.interne ? `<button type="button" class="lien" data-q="${esc(s.titre)}">${esc(s.titre)}</button>` : ext(s.url, esc(s.titre));
+  return `<div class="sim"><span>${titre} <span class="mut">${s.annee ?? ''}</span>${go}</span><span>${s.note != null ? `<b>${fr(s.note)}</b><span class="mut">/10</span>` : ''}</span></div>`;
 }
 
 // Encart « Semblable à » : recommandations des joueurs BGG (note BGG sur 10).
@@ -184,7 +198,7 @@ function jumeauxHtml(j) {
   return j.map(x => `${ligneJeu(x)}<div class="raison">En commun : ${x.raison.map(esc).join(', ')}</div>`).join('');
 }
 function extensionsHtml(e) {
-  return listeBox(`${e.length} extension${e.length > 1 ? 's' : ''} · note BGG`, e.map(x => ({ ...x, go: false })), 'Aucune extension notée.');
+  return listeBox(`${e.length} extension${e.length > 1 ? 's' : ''} · note BGG`, e.map(x => ({ ...x, interne: true })), 'Aucune extension notée.');
 }
 // Dépliable : 1er clic charge et ouvre, clic suivant referme.
 async function deplier(bouton, boite, charge, html) {
@@ -258,14 +272,15 @@ function findBga(titres, games) {
   return g ? { nom: g[1], url: 'https://boardgamearena.com/gamepanel?game=' + g[0], bggId: g[2] || null } : null;
 }
 
-// Pastille Board Game Arena, à côté du nombre de joueurs : « BGA ✓ » cliquable (page du jeu sur BGA) ou « BGA ✓ » barré si le jeu n'y est pas.
-// Rien tant que la liste BGA n'est pas lue (ou injoignable).
+// Pastille Board Game Arena, à côté du nombre de joueurs : « BGA ✓ » cliquable (page du jeu sur BGA) suivie d'un « + »
+// (ajout à la liste « À tester sur BGA »), ou « BGA ✓ » barré si le jeu n'y est pas. Rien tant que la liste BGA n'est pas lue.
 function bgaBadge(d, games) {
   if (!games) return '';
   const bga = findBga([d.query, d.myludo && d.myludo.titre], games);
-  return bga
-    ? `<a class="bga oui" href="${esc(bga.url)}" target="_blank" rel="noopener" title="Jouable sur Board Game Arena : ouvrir la page du jeu">BGA ✓</a>`
-    : '<span class="bga non" title="Pas sur Board Game Arena">BGA <s>✓</s></span>';
+  if (!bga) return '<span class="bga non" title="Pas sur Board Game Arena">BGA <s>✓</s></span>';
+  const dans = dansListe(LISTE_BGA, titreJeu(d));
+  return `<a class="bga oui" href="${esc(bga.url)}" rel="noopener" title="Jouable sur Board Game Arena : ouvrir la page du jeu">BGA ✓</a>`
+    + `<button type="button" class="bga plus${dans ? ' on' : ''}" data-liste="${esc(LISTE_BGA)}" title="Ma liste « ${esc(LISTE_BGA)} »">${dans ? '✓' : '+'}</button>`;
 }
 
 // Pied de l'encart BGG : page BoardGameGeek du jeu (lien direct si connu, repli par l'identifiant BGA, sinon recherche).
@@ -299,8 +314,8 @@ function render(d, games) {
   affiche = d;
   const m = d.myludo, L = d.liens;
   const head = m
-    ? `<div class="head">${m.image ? `<img src="${esc(m.image)}" alt="">` : ''}<div><h1>${esc(m.titre)}</h1><div class="mut">${[m.annee, m.joueurs && m.joueurs + ' joueurs', m.age].filter(Boolean).map(esc).join(' · ')}${bgaBadge(d, games)}</div></div></div>`
-    : `<div class="head"><div><h1>${esc(d.query)}</h1><div class="mut">${bgaBadge(d, games)}</div></div></div>`;
+    ? `<div class="head">${m.image ? `<img src="${esc(m.image)}" alt="">` : ''}<div><h1>${esc(m.titre)}</h1><div class="mut">${[m.annee, m.joueurs && m.joueurs + ' joueurs', m.age].filter(Boolean).map(esc).join(' · ')}${bgaBadge(d, games)}</div>${listesMenu(d)}</div></div>`
+    : `<div class="head"><div><h1>${esc(d.query)}</h1><div class="mut">${bgaBadge(d, games)}</div>${listesMenu(d)}</div></div>`;
   // Tuile MyLudo minimaliste, comme les boutiques : note, nombre de notes, titre retenu (durée et poids sont dans l'encart BGG).
   const tiles = `<div class="tiles">${tile('Esprit Jeu', 'var(--ej)', d.espritjeu, 5, 'avis', L.espritjeu)}${tile('Philibert', 'var(--ph)', d.philibert, 5, 'avis', L.philibert)}${tile('MyLudo', 'var(--ml)', m && { note: m.note, avis: m.avis, titre: m.titre, url: m.url }, 10, 'notes', L.myludo || '#')}</div>`;
   $('#out').innerHTML = `${retour()}${ongletsHtml()}${head}${tiles}${bggCard(d, games)}${semblables(d)}${jumeauxBloc(d)}${auteur(m)}${okk(d.okkazeo, L.okkazeo, prixNeuf(d))}`;
@@ -342,7 +357,74 @@ function titresOuverts() {
 }
 function majVers() {
   const v = $('#vers');
-  if (v) v.innerHTML = onglets.length >= 2 ? `<button type="button" class="petit" id="versPanier">🛒 ${onglets.length} jeux → matchmaking</button>` : '';
+  const n = listes.reduce((s, l) => s + l.jeux.length, 0);
+  if (v) v.innerHTML = `<button type="button" class="petit" id="versListes">📋 Mes listes${n ? ` (${n})` : ''}</button>`
+    + (onglets.length >= 2 ? `<button type="button" class="petit" id="versPanier">🛒 ${onglets.length} jeux → matchmaking</button>` : '');
+}
+
+// Mes listes : « À essayer », « À acheter », « À tester sur BGA » (fixes) + listes créées. Gardées dans le navigateur
+// (localStorage, propres à cet appareil) ; stockage indisponible → listes gardées le temps de la page.
+const LISTES_CLE = 'notesJeux.listes';
+const LISTE_BGA = 'À tester sur BGA';
+const LISTES_FIXES = ['À essayer', 'À acheter', LISTE_BGA];
+function lireListes() {
+  let l = [];
+  try { l = JSON.parse(localStorage.getItem(LISTES_CLE)) || []; } catch (e) { l = []; }
+  for (const nom of [...LISTES_FIXES].reverse()) if (!l.some(x => x.nom === nom)) l.unshift({ nom, jeux: [] });
+  return l;
+}
+const listes = lireListes();
+const sauverListes = () => { try { localStorage.setItem(LISTES_CLE, JSON.stringify(listes)); } catch (e) { /* voir lireListes */ } };
+const titreJeu = d => (d.myludo && d.myludo.titre) || (d.bgg && d.bgg.titre) || d.query;
+const memeJeu = (a, b) => a.trim().toLowerCase() === b.trim().toLowerCase();
+const dansListe = (nom, titre) => listes.some(l => l.nom === nom && l.jeux.some(j => memeJeu(j, titre)));
+function basculer(nom, titre) {
+  const l = listes.find(x => x.nom === nom);
+  if (!l || !titre) return;
+  const i = l.jeux.findIndex(j => memeJeu(j, titre));
+  if (i >= 0) l.jeux.splice(i, 1); else l.jeux.push(titre);
+  sauverListes();
+}
+function creerListe(nom) {
+  nom = String(nom || '').trim().slice(0, 40);
+  if (!nom || listes.some(x => memeJeu(x.nom, nom))) return null;
+  listes.push({ nom, jeux: [] });
+  sauverListes();
+  return nom;
+}
+const champListe = '<div class="nvlw"><input class="nvl" maxlength="40" placeholder="Nouvelle liste" aria-label="Nom de la nouvelle liste"><button type="button" class="petit" data-nvl="1">Créer</button></div>';
+// « ＋ Liste » sous le titre du jeu : une pastille par liste (verte si le jeu y est), clic = ajouter / retirer.
+function listesMenu(d) {
+  const t = titreJeu(d);
+  return `<details class="addl"><summary>＋ Liste</summary><div class="chips">${listes.map(l => `<button type="button" class="chip${dansListe(l.nom, t) ? ' on' : ''}" data-liste="${esc(l.nom)}">${esc(l.nom)}</button>`).join('')}</div>${champListe}</details>`;
+}
+// Écran « Mes listes » : jeux cliquables (ouverts comme un 🔍), ✕ pour retirer, 🛒 vers le matchmaking, suppression des listes créées.
+function listesHtml() {
+  return `<h2 class="titre-l">📋 Mes listes</h2>${listes.map(l => `<section class="aut"><h3>${esc(l.nom)} · ${l.jeux.length}</h3>${l.jeux.length
+    ? l.jeux.map(j => `<div class="sim"><button type="button" class="lien" data-q="${esc(j)}">${esc(j)}</button><button type="button" class="x" data-retire="${esc(l.nom)}" data-titre="${esc(j)}" aria-label="Retirer ${esc(j)}" title="Retirer">✕</button></div>`).join('')
+    : '<p class="na">Vide.</p>'}<div class="actl">${l.jeux.length >= 2 ? `<button type="button" class="petit" data-panier="${esc(l.nom)}">🛒 ${l.jeux.length} jeux → matchmaking</button>` : ''}${LISTES_FIXES.includes(l.nom) ? '' : `<button type="button" class="petit" data-suppr="${esc(l.nom)}">Supprimer la liste</button>`}</div></section>`).join('')}<section class="aut"><h3>Nouvelle liste</h3>${champListe}</section>`;
+}
+function afficherListes() {
+  if (affiche && courant) pile.push(courant); // « ← Retour à » ramène au jeu d'où l'on vient
+  seq++;
+  affiche = null;
+  comparant = false;
+  $('#out').innerHTML = `${retour()}${ongletsHtml()}${listesHtml()}`;
+  majVers();
+}
+// Après un ajout / retrait : pastilles du jeu affiché mises à jour sur place (les encarts dépliés restent ouverts).
+function majListeBoutons(nom) {
+  const on = dansListe(nom, titreJeu(affiche));
+  $('#out').querySelectorAll('[data-liste]').forEach(b => {
+    if (b.dataset.liste !== nom) return;
+    b.classList.toggle('on', on);
+    if (b.classList.contains('plus')) b.textContent = on ? '✓' : '+';
+  });
+}
+function versPanier(jeux) {
+  $('#pj').value = jeux.join('\n');
+  $('.panier').scrollIntoView({ behavior: 'smooth' });
+  $('#pj').focus();
 }
 
 function skeleton() {
@@ -436,7 +518,7 @@ async function search(q) {
 function lancer(q, garder) {
   if (!q) return;
   comparant = false;
-  if (garder && courant) pile.push(courant); else if (!garder) pile.length = 0;
+  if (garder && courant && pile[pile.length - 1] !== courant) pile.push(courant); else if (!garder) pile.length = 0;
   if (garder) {
     if (!onglets.length && courant) onglets = [courant.query];
     let i = onglets.findIndex(x => cleDe(x) === cleDe(q));
@@ -465,8 +547,29 @@ $('#f').addEventListener('submit', e => {
 // Raccourci 🔍 à côté d'un jeu semblable : lance la recherche de ce jeu sans retaper son nom.
 $('#out').addEventListener('click', e => {
   const t = s => e.target.closest && e.target.closest(s);
-  const b = t('.go');
+  const b = t('.go') || t('[data-q]');
   if (b) { lancer(b.dataset.q, true); scrollTo(0, 0); return; }
+  const li = t('[data-liste]');
+  if (li && affiche) { basculer(li.dataset.liste, titreJeu(affiche)); majListeBoutons(li.dataset.liste); majVers(); return; }
+  const nv = t('[data-nvl]');
+  if (nv) {
+    const nom = creerListe(nv.closest('.nvlw').querySelector('input').value);
+    if (!nom) return;
+    if (!affiche) { afficherListes(); return; }
+    basculer(nom, titreJeu(affiche)); // créée depuis un jeu : il y est ajouté
+    BGA.then(games => { render(affiche, games); const m = $('.addl'); if (m) m.open = true; });
+    return;
+  }
+  const re = t('[data-retire]');
+  if (re) { basculer(re.dataset.retire, re.dataset.titre); afficherListes(); return; }
+  const su = t('[data-suppr]');
+  if (su) {
+    const i = listes.findIndex(l => l.nom === su.dataset.suppr);
+    if (i >= 0 && confirm(`Supprimer la liste « ${listes[i].nom} » ?`)) { listes.splice(i, 1); sauverListes(); afficherListes(); }
+    return;
+  }
+  const pa = t('[data-panier]');
+  if (pa) { versPanier((listes.find(l => l.nom === pa.dataset.panier) || { jeux: [] }).jeux); return; }
   const x = t('[data-x]');
   if (x) { fermer(Number(x.dataset.x)); return; }
   if (t('[data-comp]')) { afficherComparaison(); return; }
@@ -493,11 +596,11 @@ $('#out').addEventListener('click', e => {
 });
 
 // 🛒 : les jeux ouverts partent dans la case du matchmaking (titres MyLudo : Okkazeo ne cherche que le titre exact).
+// 📋 : écran « Mes listes ».
 $('#vers').addEventListener('click', e => {
-  if (!(e.target.closest && e.target.closest('#versPanier'))) return;
-  $('#pj').value = titresOuverts().join('\n');
-  $('.panier').scrollIntoView({ behavior: 'smooth' });
-  $('#pj').focus();
+  const t = s => e.target.closest && e.target.closest(s);
+  if (t('#versPanier')) versPanier(titresOuverts());
+  else if (t('#versListes')) { afficherListes(); scrollTo(0, 0); }
 });
 
 // Saisie semi-automatique (titres MyLudo), à partir de 3 lettres, pas pendant une liste « A, B ».
@@ -577,6 +680,7 @@ $('#pf').addEventListener('submit', async e => {
   }
 });
 
+majVers();
 const initial = new URLSearchParams(location.search).get('q');
 if (initial) lancer(initial.trim());
 </script>
