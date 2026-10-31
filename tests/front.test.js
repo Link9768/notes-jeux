@@ -7,7 +7,7 @@ const vm = require('node:vm');
 const html = fs.readFileSync(`${__dirname}/../index.html`, 'utf8');
 const script = html.match(/<script>([\s\S]*?)<\/script>/)[1];
 const el = () => ({ addEventListener() {}, value: '', innerHTML: '' });
-const front = vm.runInNewContext(`${script}; ({ okk, tile, fr, myludo, liens, findBga, bgaBadge, auteur, retour, pile, panierHtml, semblables })`, {
+const front = vm.runInNewContext(`${script}; ({ okk, tile, fr, bggCard, liens, findBga, bgaBadge, auteur, retour, pile, panierHtml, semblables })`, {
   document: { querySelector: el }, location: { search: '' }, history: {}, fetch: async () => { throw new Error('pas de réseau'); }, URLSearchParams,
 });
 
@@ -38,19 +38,34 @@ test('texte venant des sites échappé (pas d\'injection HTML)', () => {
   assert.ok(!h.includes('<img src=x'));
 });
 
-const ml = over => ({ note: 8.3, avis: 1500, titre: 'Clank!', url: 'https://www.myludo.fr/#!/game/clank-19410', annee: 2017, joueurs: '2 — 4', duree: 60, complexite: 2.5,
-  mecaniques: ['Card-driven', 'Deck building'], themes: ['Dragons'], similaires: [{ titre: 'Tainted Grail', annee: 2019, url: 'https://www.myludo.fr/#!/game/tainted-grail-27766', note: 8.6 }], ...over });
-test('encart MyLudo : note, infos, mécaniques et thèmes (plus de semblables : ils viennent de BGG)', () => {
-  const h = front.myludo(ml(), '#');
-  for (const t of ['8,3', '/10', '1500 notes', '60 min', '2 — 4', '2,5/5', 'Deck building', 'Dragons']) assert.ok(h.includes(t), t);
+const ml = over => ({ note: 8.3, avis: 1500, titre: 'Clank!', url: 'https://www.myludo.fr/#!/game/clank-19410', annee: 2017, joueurs: '2 — 4', duree: 60, complexite: 2.5, ...over });
+const bggD = over => ({ query: 'abyss', myludo: { titre: 'Abyss' }, liens: { bgg: 'https://boardgamegeek.com/geeksearch.php?q=x' },
+  bgg: { note: 7.3, votes: 17096, duree: '30–60', joueurs: '2–4', poids: 2.31, annee: 2014, titre: 'Abyss', url: 'https://boardgamegeek.com/boardgame/155987',
+    mecaniques: ['Enchères', 'Gestion de main', 'Stop ou encore'], themes: ['Fantastique'] }, ...over });
+test('grand encart BGG : note, votes, infos, style de jeu en français, lien vers la page BGG', () => {
+  const h = front.bggCard(bggD(), null);
+  for (const t of ['BoardGameGeek', '7,3', '/10', '17096 votes', '30–60 min', '👥 2–4', '2,31/5', 'Enchères', 'Stop ou encore', 'chip th">Fantastique', 'href="https://boardgamegeek.com/boardgame/155987"']) assert.ok(h.includes(t), t);
 });
-test('encart MyLudo : source nulle → indisponible ; mécaniques null → indisponible sans effacer la note', () => {
-  assert.ok(front.myludo(null, 's').includes('indisponible'));
-  const h = front.myludo(ml({ mecaniques: null, similaires: null }), '#');
-  assert.ok(h.includes('indisponible') && h.includes('8,3') && !h.includes('Semblable à'));
+test('grand encart BGG : fiche absente → indisponible + recherche BGG ; style vide → « non renseigné » sans effacer la note', () => {
+  const h = front.bggCard(bggD({ bgg: null, bggUrl: null, query: 'clank', myludo: { titre: 'Clank!' } }), null);
+  assert.ok(h.includes('indisponible') && h.includes('Chercher sur BoardGameGeek'));
+  const v = front.bggCard(bggD({ bgg: { ...bggD().bgg, mecaniques: [], themes: [] } }), null);
+  assert.ok(v.includes('non renseigné') && v.includes('7,3'));
 });
-test('encart MyLudo : texte venant du site échappé', () => {
-  assert.ok(!front.myludo(ml({ mecaniques: ['<img src=x onerror=alert(1)>'] }), '#').includes('<img src=x'));
+test('grand encart BGG : texte échappé', () => {
+  assert.ok(!front.bggCard(bggD({ bgg: { ...bggD().bgg, mecaniques: ['<img src=x onerror=alert(1)>'] } }), null).includes('<img src=x'));
+});
+test('tuile MyLudo minimaliste dans la page : note, notes, titre, sans durée ni complexité', async () => {
+  const els = {};
+  const elx = sel => (els[sel] = els[sel] || { innerHTML: '', value: '', addEventListener() {} });
+  const ctx = { document: { querySelector: elx }, location: { search: '' }, history: { replaceState() {} }, URLSearchParams,
+    fetch: async u => (String(u).includes('/webhook/') ? { ok: true, json: async () => ({ query: 'clank', myludo: ml(), bgg: null, liens: { bgg: '#' }, okkazeo: null }) } : { ok: false }) };
+  const f = vm.runInNewContext(`${script}; ({ lancer })`, ctx);
+  f.lancer('clank');
+  await new Promise(r => setTimeout(r, 10));
+  const tuiles = els['#out'].innerHTML.match(/<div class="tiles">[\s\S]*?<\/div><\/div><\/div>/)[0];
+  for (const t of ['MyLudo', '8,3', '1500 notes', '« Clank! »']) assert.ok(tuiles.includes(t), t);
+  assert.ok(!tuiles.includes('⏱') && !tuiles.includes('⚖'));
 });
 test('semblables : bouton 🔍 portant le titre (échappé) pour relancer la recherche', () => {
   const h = front.semblables({ similaires: [{ titre: "L'Île \"X\"", annee: 2019, url: 'u', note: 8 }] });
@@ -96,10 +111,9 @@ test('pastille BGA : jeu absent → coche barrée sans lien ; liste injoignable 
   assert.equal(front.bgaBadge(lien(), null), '');
 });
 const jeuxAuteur = { nom: 'Paul Dennen', jeux: [{ titre: 'Dune Imperium', annee: 2021, url: 'https://www.myludo.fr/#!/game/dune-1' }, { titre: 'Eternal', annee: 2019, url: 'https://www.myludo.fr/#!/game/eternal-2' }] };
-test('même auteur : encart à part (plus dans l’encart MyLudo), nom de l’auteur, jeux et bouton 🔍', () => {
+test('même auteur : encart à part, nom de l’auteur, jeux et bouton 🔍', () => {
   const h = front.auteur(ml({ memeAuteur: jeuxAuteur }));
   assert.ok(h.includes('class="aut"') && h.includes('Du même auteur · Paul Dennen') && h.includes('Dune Imperium') && h.includes('data-q="Eternal"'));
-  assert.ok(!front.myludo(ml({ memeAuteur: jeuxAuteur }), '#').includes('Du même auteur'));
 });
 test('même auteur : absent ou vide → pas d’encart', () => {
   assert.equal(front.auteur(ml({ memeAuteur: null })), '');
@@ -196,7 +210,6 @@ test('tuile BGG : durée et poids affichés sous la note', () => {
 test('encart « Semblable à » : recommandations BGG avec note et bouton 🔍 ; rien si absentes', () => {
   const h = front.semblables({ similaires: [{ titre: 'Everdell', annee: 2018, url: 'https://boardgamegeek.com/boardgame/199792/everdell', note: 8 }] });
   assert.ok(h.includes('Semblable à · recommandations BGG') && h.includes('Everdell') && h.includes('href="https://boardgamegeek.com/boardgame/199792/everdell"') && h.includes('data-q="Everdell"'));
-  assert.ok(!front.myludo(ml(), '#').includes('Semblable à'));
   assert.equal(front.semblables({ similaires: null }), '');
   assert.equal(front.semblables({ similaires: [] }), '');
 });

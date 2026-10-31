@@ -39,7 +39,6 @@ a{color:var(--acc)}
 .sim:first-of-type{border-top:0}
 .go{padding:2px 8px;margin-left:6px;border:1px solid var(--line);border-radius:8px;background:transparent;color:var(--mut);font-size:13px;line-height:1.4;cursor:pointer}
 .go:hover{color:var(--txt);border-color:var(--ml)}
-.liens{display:flex;flex-wrap:wrap;gap:8px 18px;margin-top:10px;padding:10px 12px;background:var(--card);border:1px solid var(--line);border-radius:12px;align-items:center}
 .onglets{display:flex;gap:6px;overflow-x:auto;margin-bottom:12px;padding-bottom:4px}
 .onglet{padding:7px 12px;border:1px solid var(--line);border-radius:999px;background:var(--card);color:var(--txt);font-size:13px;font-weight:600;white-space:nowrap;cursor:pointer}
 .onglet.on{background:var(--acc);border-color:var(--acc);color:#fff}
@@ -55,6 +54,8 @@ a{color:var(--acc)}
 .bga.oui:hover{background:#34c75966}
 .bga.non{background:var(--line);color:var(--mut)}
 .ml footer{padding:10px;text-align:center;border-top:1px solid var(--line)}
+.ml.bgg{border-color:var(--bgg)}
+.ml.bgg header{background:var(--bgg)}
 .okk{border:2px solid var(--okk);border-radius:12px;overflow:hidden;margin-top:14px}
 .okk header{background:var(--okk);color:#fff;padding:10px 12px}
 .okk header b{font-size:15px}
@@ -143,15 +144,17 @@ function retour() {
   return p ? `<button type="button" class="back">← Retour à ${esc((p.myludo && p.myludo.titre) || p.query)}</button>` : '';
 }
 
-// Grand encart MyLudo : note de la communauté, infos pratiques, style de jeu (mécaniques).
-function myludo(m, lien) {
-  if (!m) return `<section class="ml"><header><b>MyLudo</b><span>indisponible</span></header><footer>${ext(lien, 'Chercher sur MyLudo ↗')}</footer></section>`;
-  const note = m.note == null ? `<span class="na">pas encore d'avis</span>` : `<span class="big">${fr(m.note)}<small>/10</small></span> <span class="mut">${m.avis} notes</span>`;
-  const facts = [m.duree && `⏱ ${esc(m.duree)} min`, m.joueurs && `👥 ${esc(m.joueurs)}`, m.complexite != null && `⚖ ${fr(m.complexite)}/5`].filter(Boolean).map(f => `<span>${f}</span>`).join('');
-  const style = m.mecaniques === null || m.mecaniques === undefined
-    ? '<div class="na">indisponible</div>'
-    : `<div class="chips">${m.mecaniques.map(x => `<span class="chip">${esc(x)}</span>`).join('')}${(m.themes || []).map(x => `<span class="chip th">${esc(x)}</span>`).join('')}</div>`;
-  return `<section class="ml"><header><b>MyLudo</b><span>${m.annee ? esc(m.annee) : ''}</span></header><div class="body"><div>${note}</div><div class="facts">${facts}</div><div><h3>Style de jeu</h3>${style}</div></div><footer>${ext(m.url, 'Ouvrir sur MyLudo ↗')}</footer></section>`;
+// Grand encart BoardGameGeek : note, infos pratiques, style de jeu (mécaniques et catégories BGG traduites en français).
+function bggCard(d, games) {
+  const b = d.bgg, pied = `<footer>${liens(d, games)}</footer>`;
+  if (!b) return `<section class="ml bgg"><header><b>BoardGameGeek</b><span>indisponible</span></header>${pied}</section>`;
+  const note = b.note == null ? `<span class="na">pas encore d'avis</span>` : `<span class="big">${fr(b.note)}<small>/10</small></span> <span class="mut">${b.votes} votes</span>`;
+  const facts = [b.duree && `⏱ ${esc(b.duree)} min`, b.joueurs && `👥 ${esc(b.joueurs)}`, b.poids != null && `⚖ ${fr(b.poids)}/5`].filter(Boolean).map(f => `<span>${f}</span>`).join('');
+  const meca = b.mecaniques || [], th = b.themes || [];
+  const style = meca.length || th.length
+    ? `<div class="chips">${meca.map(x => `<span class="chip">${esc(x)}</span>`).join('')}${th.map(x => `<span class="chip th">${esc(x)}</span>`).join('')}</div>`
+    : '<div class="na">non renseigné</div>';
+  return `<section class="ml bgg"><header><b>BoardGameGeek</b><span>${b.annee ? esc(b.annee) : ''}</span></header><div class="body"><div>${note}</div><div class="facts">${facts}</div><div><h3>Style de jeu</h3>${style}</div></div>${pied}</section>`;
 }
 
 // Board Game Arena : liste des jeux publics (lib/bga-games.json, régénérée par scripts/build-bga-list.mjs) chargée avec la page.
@@ -192,11 +195,11 @@ function bgaBadge(d, games) {
     : '<span class="bga non" title="Pas sur Board Game Arena">BGA <s>✓</s></span>';
 }
 
-// Sous les encarts : page BoardGameGeek du jeu (lien direct si connu, repli par l'identifiant BGA, sinon recherche).
+// Pied de l'encart BGG : page BoardGameGeek du jeu (lien direct si connu, repli par l'identifiant BGA, sinon recherche).
 function liens(d, games) {
   const bga = findBga([d.query, d.myludo && d.myludo.titre], games);
   const bggUrl = (d.bgg && d.bgg.url) || d.bggUrl || (bga && bga.bggId ? 'https://boardgamegeek.com/boardgame/' + bga.bggId : null);
-  return `<div class="liens">${bggUrl ? ext(bggUrl, 'BoardGameGeek ↗') : ext(d.liens.bgg, 'Chercher sur BoardGameGeek ↗')}</div>`;
+  return bggUrl ? ext(bggUrl, 'Ouvrir sur BoardGameGeek ↗') : ext(d.liens.bgg, 'Chercher sur BoardGameGeek ↗');
 }
 
 function okk(o, lien) {
@@ -213,14 +216,15 @@ function render(d, games) {
   const head = m
     ? `<div class="head">${m.image ? `<img src="${esc(m.image)}" alt="">` : ''}<div><h1>${esc(m.titre)}</h1><div class="mut">${[m.annee, m.joueurs && m.joueurs + ' joueurs', m.age].filter(Boolean).map(esc).join(' · ')}${bgaBadge(d, games)}</div></div></div>`
     : `<div class="head"><div><h1>${esc(d.query)}</h1><div class="mut">${bgaBadge(d, games)}</div></div></div>`;
-  const tiles = `<div class="tiles">${tile('Esprit Jeu', 'var(--ej)', d.espritjeu, 5, 'avis', L.espritjeu)}${tile('Philibert', 'var(--ph)', d.philibert, 5, 'avis', L.philibert)}${tile('BGG', 'var(--bgg)', d.bgg, 10, 'votes', L.bgg)}</div>`;
-  $('#out').innerHTML = `${retour()}${ongletsHtml()}${head}${tiles}${myludo(m, L.myludo || '#')}${liens(d, games)}${semblables(d)}${auteur(m)}${okk(d.okkazeo, L.okkazeo)}`;
+  // Tuile MyLudo minimaliste, comme les boutiques : note, nombre de notes, titre retenu (durée et poids sont dans l'encart BGG).
+  const tiles = `<div class="tiles">${tile('Esprit Jeu', 'var(--ej)', d.espritjeu, 5, 'avis', L.espritjeu)}${tile('Philibert', 'var(--ph)', d.philibert, 5, 'avis', L.philibert)}${tile('MyLudo', 'var(--ml)', m && { note: m.note, avis: m.avis, titre: m.titre, url: m.url }, 10, 'notes', L.myludo || '#')}</div>`;
+  $('#out').innerHTML = `${retour()}${ongletsHtml()}${head}${tiles}${bggCard(d, games)}${semblables(d)}${auteur(m)}${okk(d.okkazeo, L.okkazeo)}`;
 }
 
 function skeleton() {
   const t = n => `<div class="tile"><div class="src">${n}</div><div class="skel" style="width:50%;height:22px"></div><div class="skel" style="width:70%"></div></div>`;
   const bloc = (cls, nom) => `<section class="${cls}"><header><b>${nom}</b></header><div style="padding:12px"><div class="skel"></div><div class="skel"></div><div class="skel"></div></div></section>`;
-  return `<div class="tiles">${t('Esprit Jeu')}${t('Philibert')}${t('BGG')}</div>${bloc('ml', 'MyLudo')}${bloc('okk', 'Okkazeo')}`;
+  return `<div class="tiles">${t('Esprit Jeu')}${t('Philibert')}${t('MyLudo')}</div>${bloc('ml bgg', 'BoardGameGeek')}${bloc('okk', 'Okkazeo')}`;
 }
 
 // Résultats déjà chargés, réaffichés sans rechargement pendant 15 min (clé : la recherche en minuscules).

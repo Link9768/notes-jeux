@@ -24,8 +24,27 @@ test('fiche', () => {
   assert.deepEqual(pickBgg(parseBggThings(thing)), {
     note: 7.7, votes: 45678, duree: '30–60', poids: 2.24, titre: 'Clank!: A Deck-Building Adventure',
     annee: 2016, joueurs: '2–4', age: '12+', image: 'https://cf.geekdo-images.com/x.jpg',
-    url: 'https://boardgamegeek.com/boardgame/201808',
+    url: 'https://boardgamegeek.com/boardgame/201808', mecaniques: [], themes: [],
   });
+});
+// Vraie réponse BGG Thing (exécution n8n du 2026-10-31, recherche « abyss », 8 fiches).
+test('style de jeu BGG en français : toutes les mécaniques, complétées par les catégories (≥ 7 au total)', () => {
+  const b = pickBgg(parseBggThings(fs.readFileSync(__dirname + '/fixtures/bgg-thing-abyss.xml', 'utf8')));
+  assert.equal(b.titre, 'Abyss');
+  assert.deepEqual(b.mecaniques, ['Enchères', 'Gestion de main', 'Mémoire', 'Draft ouvert', 'Stop ou encore', 'Collection']);
+  assert.deepEqual(b.themes, ['Jeu de cartes', 'Fantastique', 'Mythologie']);
+});
+test('style de jeu : libellé inconnu gardé en anglais, au moins 3 catégories, 10 mécaniques max', () => {
+  const lk = (type, v) => `<link type="${type}" id="1" value="${v}"/>`;
+  const meca = Array.from({ length: 12 }, (_, i) => lk('boardgamemechanic', 'Nouveau ' + i)).join('');
+  assert.deepEqual(pickBgg(parseBggThings(`<items><item type="boardgame" id="1"><name type="primary" value="X"/>${lk('boardgamecategory', 'Spies / Secret Agents')}</item></items>`)).themes, ['Espionnage']); // vu sur Codenames
+  const cats = ['Fantasy', 'Horror', 'Pirates', 'Zombies'].map(c => lk('boardgamecategory', c)).join('');
+  const b = pickBgg(parseBggThings(`<items><item type="boardgame" id="1"><name type="primary" value="X"/>${meca}${cats}${lk('boardgamemechanic', 'Race')}</item></items>`));
+  assert.equal(b.mecaniques.length, 10);
+  assert.equal(b.mecaniques[0], 'Nouveau 0');
+  assert.deepEqual(b.themes, ['Fantastique', 'Horreur', 'Pirates']);
+  const peu = pickBgg(parseBggThings(`<items><item type="boardgame" id="1"><name type="primary" value="X"/>${lk('boardgamemechanic', 'Race')}${cats}${lk('boardgamecategory', 'Racing')}</item></items>`));
+  assert.deepEqual([peu.mecaniques, peu.themes], [['Course'], ['Fantastique', 'Horreur', 'Pirates', 'Zombies']]); // « Course » pas en double
 });
 test('aucune fiche → null', () => assert.equal(pickBgg([]), null));
 test('jeu de base préféré à l’extension, puis le plus voté', () => {
@@ -66,9 +85,9 @@ test('candidats : sans nom de base ni nom exact, les titres les plus courts pass
 
 // Vraie réponse de geekitem/recs pour Clank! (2026-10-31), allégée aux champs lus.
 const recs = () => JSON.parse(fs.readFileSync(__dirname + '/fixtures/bgg-recs-clank.json', 'utf8'));
-test('recommandations BGG : 3 jeux, sans la gamme du jeu (Clank! In! Space!, Clank! Legacy), avec note et lien', () => {
+test('recommandations BGG : 5 jeux, sans la gamme du jeu (Clank! In! Space!, Clank! Legacy), avec note et lien', () => {
   const s = pickBggRecs(recs(), 'Clank!: A Deck-Building Adventure');
-  assert.deepEqual(s.map(x => x.titre), ['Terraforming Mars: Ares Expedition', 'Everdell', 'Scythe']);
+  assert.deepEqual(s.map(x => x.titre), ['Terraforming Mars: Ares Expedition', 'Everdell', 'Scythe', 'Small World', 'Sheriff of Nottingham']);
   assert.deepEqual([s[1].note, s[1].annee, s[1].url], [8, 2018, 'https://boardgamegeek.com/boardgame/199792/everdell']);
   assert.ok(s.every(x => x.avis > 0 && x.rang > 0));
   assert.ok(pickBggRecs(recs(), 'Clank!', 30).every(x => !/^clank/i.test(x.titre)));

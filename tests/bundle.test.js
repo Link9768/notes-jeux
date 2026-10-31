@@ -26,8 +26,9 @@ function run(name, { nodes, input = {}, http }) {
   const $input = { first: () => ({ json: input }) };
   const ctx = { helpers: { httpRequest: async o => { calls.push(o); return http(o); } } };
   // Le bac à sable des nodes Code n8n n'a NI URL NI URLSearchParams (vérifié le 2026-10-13) : on les masque.
-  return new AsyncFunction('$', '$input', 'URL', 'URLSearchParams', bundle(name))
-    .call(ctx, $, $input, undefined, undefined).then(r => ({ out: r[0].json, calls }));
+  // Il a en revanche un `module` : les blocs « module.exports » des libs s'y exécutent.
+  return new AsyncFunction('$', '$input', 'URL', 'URLSearchParams', 'module', bundle(name))
+    .call(ctx, $, $input, undefined, undefined, { exports: {} }).then(r => ({ out: r[0].json, calls }));
 }
 // MyLudo : l'API exige le jeton CSRF de la page d'accueil ET le cookie de session (sinon « Illegal action »).
 const MYL = 'https://www.myludo.fr';
@@ -125,12 +126,12 @@ const avecBgg = (q = 'clank') => ({ ...sourcesNodes(q), 'BGG Fiche': { bgg: { no
 test('sources : jeux similaires = recommandations BGG du jeu retenu par BGG', async () => {
   // Corps déjà décodé en objet : c'est ce que fait n8n pour une réponse application/json (vu en production le 2026-10-31).
   const { out, calls } = await run('sources', { nodes: avecBgg(), http: o => (o.url === RECS ? { statusCode: 200, body: JSON.parse(fs.readFileSync(`${__dirname}/fixtures/bgg-recs-clank.json`, 'utf8')) } : myludoHttp()(o)) });
-  assert.deepEqual(out.similaires.map(s => s.titre), ['Terraforming Mars: Ares Expedition', 'Everdell', 'Scythe']);
-  assert.ok(out.similaires.every(s => s.url.startsWith('https://boardgamegeek.com/boardgame/') && s.note > 7));
+  assert.deepEqual(out.similaires.map(s => s.titre), ['Terraforming Mars: Ares Expedition', 'Everdell', 'Scythe', 'Small World', 'Sheriff of Nottingham']);
+  assert.ok(out.similaires.every(s => s.url.startsWith('https://boardgamegeek.com/boardgame/') && s.note > 6));
   assert.ok(calls.find(c => c.url === RECS).headers.Authorization === undefined); // sans token
   assert.deepEqual(out.erreurs, []);
   const texte = await run('sources', { nodes: avecBgg(), http: o => (o.url === RECS ? { statusCode: 200, body: fs.readFileSync(`${__dirname}/fixtures/bgg-recs-clank.json`, 'utf8') } : myludoHttp()(o)) });
-  assert.equal(texte.out.similaires.length, 3); // corps en texte : accepté aussi
+  assert.equal(texte.out.similaires.length, 5); // corps en texte : accepté aussi
 });
 test('sources : recommandations BGG en panne → similaires null + erreur, le reste est servi ; sans fiche BGG → null sans appel', async () => {
   const { out } = await run('sources', { nodes: avecBgg(), http: o => (o.url === RECS ? { statusCode: 500, body: '' } : myludoHttp()(o)) });
@@ -272,4 +273,6 @@ test('bgg-fiche : fiche si ids, sinon null', async () => {
   assert.equal(ok.out.bgg.note, 7.8);
   const none = await run('bgg-fiche', { nodes: { 'BGG Candidats': { ids: '' } }, input: { data: '' } });
   assert.equal(none.out.bgg, null);
+  const abyss = await run('bgg-fiche', { nodes: { 'BGG Candidats': { ids: '155987' } }, input: { data: fx('bgg-thing-abyss.xml') } });
+  assert.deepEqual([abyss.out.bgg.mecaniques.length + abyss.out.bgg.themes.length, abyss.out.bgg.mecaniques[0]], [9, 'Enchères']);
 });
