@@ -316,3 +316,20 @@ test('listes : ajout depuis le jeu, gardées dans localStorage, écran « Mes li
   const f2 = vm.runInNewContext(`${script}; ({ listes })`, { ...ctx, document: { querySelector: el } });
   assert.ok(f2.listes.some(l => l.nom === 'Soirées')); // relue au chargement suivant
 });
+
+test('liste collée (un jeu par ligne, puces, numéros, tableur) → titres séparés par des virgules, espaces gardés', () => {
+  const f = vm.runInNewContext(`${script}; ({ listeCollee })`, { document: { querySelector: el }, location: { search: '' }, history: {}, fetch: async () => { throw new Error('x'); }, URLSearchParams });
+  assert.equal(f.listeCollee('7 Wonders Duel\r\n- Abyss\n\n2. Skull King\tAzul\n'), '7 Wonders Duel, Abyss, Skull King, Azul');
+});
+test('jusqu’à 20 jeux dans la barre, chargés 6 à la fois', async () => {
+  const appels = [];
+  const els = {};
+  const elx = sel => (els[sel] = els[sel] || { innerHTML: '', value: '', addEventListener() {} });
+  const ctx = { document: { querySelector: elx }, location: { search: '' }, history: { replaceState() {} }, URLSearchParams,
+    fetch: async u => { const m = String(u).match(/notes-jeux\?q=(.*)$/); if (!m) return { ok: false }; appels.push(m[1]); return { ok: true, json: async () => ({ query: m[1], myludo: null, liens: { bgg: '#' }, okkazeo: null }) }; } };
+  const f = vm.runInNewContext(`${script}; ({ lancer, onglets: () => onglets })`, ctx);
+  f.lancer(Array.from({ length: 25 }, (_, i) => 'jeu' + i).join(', '));
+  await new Promise(r => setTimeout(r, 30));
+  assert.equal(f.onglets().length, 20);
+  assert.equal(appels.length, 20);
+});

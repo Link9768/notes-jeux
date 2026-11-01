@@ -122,7 +122,7 @@ button.chip:hover,button.chip.on{background:var(--bgg);color:#fff}
 </head>
 <body>
 <main>
-  <form id="f"><input id="q" list="sugg" aria-label="Nom du jeu" placeholder="Un jeu, ou plusieurs séparés par des virgules" autocomplete="off" enterkeyhint="search"><datalist id="sugg"></datalist><button type="button" class="cam" id="camb" title="Scanner un code-barres" aria-label="Scanner un code-barres">📷</button><input type="file" id="cam" accept="image/*" capture="environment" hidden><button>Rechercher</button></form>
+  <form id="f"><input id="q" list="sugg" aria-label="Nom du jeu" placeholder="Un jeu, ou plusieurs séparés par des virgules (ou une liste collée)" autocomplete="off" enterkeyhint="search"><datalist id="sugg"></datalist><button type="button" class="cam" id="camb" title="Scanner un code-barres" aria-label="Scanner un code-barres">📷</button><input type="file" id="cam" accept="image/*" capture="environment" hidden><button>Rechercher</button></form>
   <div class="outils-r" id="vers"></div>
   <div id="out" aria-live="polite"></div>
   <section class="panier">
@@ -459,7 +459,7 @@ function charger(q) {
 // Recherche de plusieurs jeux (séparés par des virgules) : un onglet par jeu, tous chargés en parallèle,
 // navigation libre d'un onglet à l'autre sans rechargement.
 // Un 🔍 (semblables, même auteur, jumeaux, top d'une mécanique) ouvre le jeu ET l'ajoute en onglet ; ✕ ferme un onglet.
-const MAX_ONGLETS = 15;
+const MAX_ONGLETS = 20;
 let onglets = [];
 let actif = -1;
 let comparant = false; // onglet « ⚖ Comparer » affiché
@@ -514,7 +514,7 @@ async function search(q) {
 
 // garder : recherche lancée depuis un 🔍 → on mémorise l'écran actuel pour pouvoir y revenir, et le jeu est ajouté
 // aux onglets (le jeu d'où l'on vient en devient un s'il n'y en avait pas) ;
-// sinon nouvelle recherche, pile vidée, et une liste « A, B, C » ouvre un onglet par jeu (15 au plus).
+// sinon nouvelle recherche, pile vidée, et une liste « A, B, C » ouvre un onglet par jeu (20 au plus).
 function lancer(q, garder) {
   if (!q) return;
   comparant = false;
@@ -534,7 +534,10 @@ function lancer(q, garder) {
   if (!garder) $('#q').value = q;
   history.replaceState(null, '', '?q=' + encodeURIComponent(garder ? q : $('#q').value));
   if (onglets.length && !garder) {
-    onglets.forEach(x => charger(x).then(majOnglets, majOnglets));
+    // 6 chargements à la fois (20 jeux d'un coup = ~300 requêtes vers MyLudo et les boutiques).
+    const file = onglets.slice();
+    const suivant = () => { const x = file.shift(); if (x) charger(x).then(majOnglets, majOnglets).then(suivant); };
+    for (let k = 0; k < 6; k++) suivant();
     search(onglets[0]);
   } else search(q);
 }
@@ -601,6 +604,18 @@ $('#vers').addEventListener('click', e => {
   const t = s => e.target.closest && e.target.closest(s);
   if (t('#versPanier')) versPanier(titresOuverts());
   else if (t('#versListes')) { afficherListes(); scrollTo(0, 0); }
+});
+
+// Liste collée (un jeu par ligne, ou cellules d'un tableur) : chaque retour à la ligne / tabulation devient une virgule,
+// puces et numéros retirés. Les espaces restent dans les titres (« 7 Wonders Duel »).
+const listeCollee = t => t.split(/[\r\n\t]+/).map(x => x.replace(/^\s*(?:[-•*]|\d+[.)])\s+/, '').trim()).filter(Boolean).join(', ');
+$('#q').addEventListener('paste', e => {
+  const t = (e.clipboardData && e.clipboardData.getData('text')) || '';
+  if (!/[\r\n\t]/.test(t.trim())) return;
+  e.preventDefault();
+  const q = $('#q'), a = q.selectionStart ?? q.value.length, b = q.selectionEnd ?? a;
+  const avant = q.value.slice(0, a).trim();
+  q.value = (avant ? avant + ', ' : '') + listeCollee(t) + q.value.slice(b);
 });
 
 // Saisie semi-automatique (titres MyLudo), à partir de 3 lettres, pas pendant une liste « A, B ».

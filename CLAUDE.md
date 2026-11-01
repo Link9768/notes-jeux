@@ -69,7 +69,7 @@ Case en bas de page : 2 à 8 jeux (un par ligne) → vendeurs Okkazeo qui en pro
 
 Les résultats déjà chargés sont gardés 15 min en mémoire de la page (clé : recherche en minuscules) : re-cliquer sur un jeu déjà vu ne rappelle pas le webhook. 🔍 sur un jeu (semblables, même auteur) empile l'écran courant ; « ← Retour à … » le réaffiche sans réseau.
 
-Plusieurs jeux dans la barre (« Abyss, Clank, Azul », virgule ou point-virgule, 8 max) : un onglet par jeu, tous chargés en parallèle (`charger` : un même jeu n'est demandé qu'une fois), puis navigation sans réseau. Étiquette = titre MyLudo une fois chargé, « … » pendant le chargement, « ⚠ » en cas d'échec (un clic relance).
+Plusieurs jeux dans la barre (« Abyss, Clank, Azul », virgule ou point-virgule, 20 max ; une liste collée, un jeu par ligne, est convertie en virgules) : un onglet par jeu, chargés 6 à la fois (`charger` : un même jeu n'est demandé qu'une fois), puis navigation sans réseau. Étiquette = titre MyLudo une fois chargé, « … » pendant le chargement, « ⚠ » en cas d'échec (un clic relance).
 
 ## v2 (2026-10-31) — spec : `../docs/2026-10-31_notes-jeux-v2-design.md`
 
