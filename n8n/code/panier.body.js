@@ -13,8 +13,10 @@ const BROWSER = {
   'sec-ch-ua-mobile': '?0', 'sec-ch-ua-platform': '"Windows"',
   'Accept-Encoding': 'gzip, deflate, br', 'Referer': 'https://www.google.com/',
 };
-// Garde-fou anti-bannissement : au moins 0,4 s entre deux requêtes Okkazeo (toutes requêtes confondues), 2 jeux à la fois.
-const PAUSE_MS = 400;
+// Deux vitesses : jusqu'à 15 jeux, rythme normal (3 jeux à la fois, sans pause : sans souci en production) ;
+// au-delà, garde-fou anti-bannissement : 2 jeux à la fois et au moins 0,4 s entre deux requêtes Okkazeo.
+const PRUDENT = noms.length > 15;
+const PAUSE_MS = PRUDENT ? 400 : 0;
 let prochain = 0;
 const attendre = async () => {
   const t = Math.max(0, prochain - Date.now());
@@ -59,11 +61,11 @@ async function unJeuMemo(nom) {
   return v;
 }
 
-// 2 jeux à la fois (file d'attente) ; un jeu en échec n'arrête pas les autres.
+// File d'attente (3 jeux à la fois, 2 en mode prudent) ; un jeu en échec n'arrête pas les autres.
 const msg = e => (e && e.message) || String(e);
 const jeux = new Array(noms.length);
 let suivant = 0;
-await Promise.all([0, 1].map(async () => {
+await Promise.all(Array.from({ length: PRUDENT ? 2 : 3 }, async () => {
   while (suivant < noms.length) {
     const i = suivant++;
     try { jeux[i] = await unJeuMemo(noms[i]); } catch (e) { jeux[i] = { demande: noms[i], titre: null, url: null, annonces: [], erreur: msg(e) }; }

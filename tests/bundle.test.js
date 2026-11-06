@@ -278,14 +278,22 @@ test('bgg-fiche : fiche si ids, sinon null', async () => {
   assert.deepEqual([abyss.out.bgg.mecaniques.length + abyss.out.bgg.themes.length, abyss.out.bgg.mecaniques[0].nom], [9, 'Enchères']);
   assert.deepEqual([abyss.out.bgg.rang, abyss.out.bgg.ideal, abyss.out.bgg.extensions], [453, '4', 7]);
 });
-test('panier : requêtes Okkazeo espacées d’au moins 0,4 s ; jeu déjà cherché dans l’heure → aucune requête (mémoire du workflow)', async () => {
+test('panier : 15 jeux ou moins → pas de pause entre les requêtes', async () => {
+  const t = [];
+  await run('panier', { nodes: panierNodes('clank|dixit: odyssey'), http: o => { t.push(Date.now()); return panierHttp(o); } });
+  assert.ok(t[t.length - 1] - t[0] < 300, `${t[t.length - 1] - t[0]} ms`);
+});
+test('panier : plus de 15 jeux → requêtes Okkazeo espacées d’au moins 0,4 s ; jeu déjà cherché dans l’heure → aucune requête (mémoire du workflow)', async () => {
   const statique = {};
   globalThis.$getWorkflowStaticData = () => statique;
   try {
     const t = [];
-    const a = await run('panier', { nodes: panierNodes('clank|dixit: odyssey'), http: o => { t.push(Date.now()); return panierHttp(o); } });
-    assert.ok(t.length >= 4);
-    for (let i = 1; i < t.length; i++) assert.ok(t[i] - t[i - 1] >= 380, `écart ${t[i] - t[i - 1]} ms`);
+    const autres = Array.from({ length: 14 }, (_, i) => 'azertyuiop' + i).join('|'); // 16 jeux au total : mode prudent
+    const a = await run('panier', { nodes: panierNodes('clank|dixit: odyssey|' + autres), http: o => { t.push(Date.now()); return panierHttp(o); } });
+    assert.ok(t.length >= 16);
+    const moyenne = (t[t.length - 1] - t[0]) / (t.length - 1); // créneaux fixes de 0,4 s : un écart isolé peut être un peu plus court si le précédent est parti en retard
+    assert.ok(moyenne >= 395, `écart moyen ${moyenne} ms`);
+    for (let i = 1; i < t.length; i++) assert.ok(t[i] - t[i - 1] >= 300, `écart ${t[i] - t[i - 1]} ms`);
     const b = await run('panier', { nodes: panierNodes('Clank|dixit: odyssey'), http: panierHttp });
     assert.equal(b.calls.length, 0);
     assert.deepEqual(b.out.vendeurs, a.out.vendeurs);

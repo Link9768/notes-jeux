@@ -685,9 +685,9 @@ $('#pf').addEventListener('submit', async e => {
   e.preventDefault();
   const jeux = $('#pj').value.split(/[\n,;|]+/).map(x => x.trim()).filter(Boolean);
   if (jeux.length < 2) { $('#pr').innerHTML = '<p class="na">Mets au moins 2 jeux (un par ligne).</p>'; return; }
-  // Le workflow espace ses requêtes Okkazeo (anti-bannissement) : ~1,2 s par jeu jamais cherché dans l'heure, instantané sinon.
+  // Au-delà de 15 jeux, le workflow espace ses requêtes Okkazeo (anti-bannissement) : ~1,2 s par jeu jamais cherché dans l'heure.
   const n = Math.min(jeux.length, 50), debut = Date.now();
-  const attente = () => { $('#pr').innerHTML = `<p class="mut">Recherche de ${n} jeux sur Okkazeo… ${Math.round((Date.now() - debut) / 1000)} s (jusqu'à ~${Math.ceil(n * 1.2)} s ; les jeux déjà cherchés dans l'heure sont instantanés)</p><div class="skel"></div><div class="skel"></div>`; };
+  const attente = () => { $('#pr').innerHTML = `<p class="mut">Recherche de ${n} jeux sur Okkazeo… ${Math.round((Date.now() - debut) / 1000)} s (jusqu'à ~${Math.ceil(n * (n > 15 ? 1.2 : 0.5))} s ; les jeux déjà cherchés dans l'heure sont instantanés)</p><div class="skel"></div><div class="skel"></div>`; };
   attente();
   const minuteur = setInterval(attente, 1000);
   try {
