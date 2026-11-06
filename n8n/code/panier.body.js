@@ -13,7 +13,16 @@ const BROWSER = {
   'sec-ch-ua-mobile': '?0', 'sec-ch-ua-platform': '"Windows"',
   'Accept-Encoding': 'gzip, deflate, br', 'Referer': 'https://www.google.com/',
 };
+// Garde-fou anti-bannissement : au moins 0,4 s entre deux requêtes Okkazeo (toutes requêtes confondues), 2 jeux à la fois.
+const PAUSE_MS = 400;
+let prochain = 0;
+const attendre = async () => {
+  const t = Math.max(0, prochain - Date.now());
+  prochain = Math.max(Date.now(), prochain) + PAUSE_MS;
+  if (t) await new Promise(ok => setTimeout(ok, t));
+};
 const get = async url => {
+  await attendre();
   const r = await this.helpers.httpRequest({ url, headers: BROWSER, json: false, timeout: 10000, returnFullResponse: true, ignoreHttpStatusErrors: true });
   if (r.statusCode >= 400) throw new Error(`HTTP ${r.statusCode} ${url}`);
   return String(r.body ?? '');
@@ -36,11 +45,30 @@ async function unJeu(nom) {
   return { demande: nom, titre: p.title, url: editions.length === 1 ? editions[0].url : recherche, annonces: pages.flatMap(parseAnnoncesArticles) };
 }
 
-// 3 jeux à la fois pour ne pas inonder Okkazeo.
-const res = [];
-for (let i = 0; i < noms.length; i += 3) res.push(...await Promise.allSettled(noms.slice(i, i + 3).map(unJeu)));
-const msg = r => (r.reason && r.reason.message) || String(r.reason);
-const jeux = res.map((r, i) => (r.status === 'fulfilled' ? r.value : { demande: noms[i], titre: null, url: null, annonces: [], erreur: msg(r) }));
+// Mémoire d'1 h dans le workflow (données statiques, gardées entre deux exécutions de production) :
+// un jeu déjà cherché dans l'heure ne coûte aucune requête. Absente hors production (tests) → objet vide.
+const MEMOIRE_MS = 60 * 60 * 1000;
+const statique = typeof $getWorkflowStaticData === 'function' ? $getWorkflowStaticData('global') : {};
+const memoire = statique.panier || (statique.panier = {});
+for (const k of Object.keys(memoire)) if (Date.now() - memoire[k].t > MEMOIRE_MS) delete memoire[k];
+async function unJeuMemo(nom) {
+  const k = normalize(nom), m = memoire[k];
+  if (m) return { ...m.v, demande: nom };
+  const v = await unJeu(nom);
+  memoire[k] = { t: Date.now(), v };
+  return v;
+}
+
+// 2 jeux à la fois (file d'attente) ; un jeu en échec n'arrête pas les autres.
+const msg = e => (e && e.message) || String(e);
+const jeux = new Array(noms.length);
+let suivant = 0;
+await Promise.all([0, 1].map(async () => {
+  while (suivant < noms.length) {
+    const i = suivant++;
+    try { jeux[i] = await unJeuMemo(noms[i]); } catch (e) { jeux[i] = { demande: noms[i], titre: null, url: null, annonces: [], erreur: msg(e) }; }
+  }
+}));
 const vendeurs = matchVendeurs(jeux.filter(j => j.titre), CP_PARIS);
 const erreurs = jeux.filter(j => j.erreur).map(j => `${j.demande}: ${j.erreur}`);
 return [{ json: { jeux: jeux.map(j => ({ demande: j.demande, titre: j.titre, url: j.url, annonces: j.annonces.length })), vendeurs, erreurs } }];

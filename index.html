@@ -127,7 +127,7 @@ button.chip:hover,button.chip.on{background:var(--bgg);color:#fff}
   <div id="out" aria-live="polite"></div>
   <section class="panier">
     <header><b>Matchmaking Okkazeo</b><span>vendeurs qui ont plusieurs jeux de ta liste</span></header>
-    <form id="pf"><textarea id="pj" rows="4" aria-label="Jeux recherchés, un par ligne" placeholder="Un jeu par ligne (2 à 15)&#10;7 Wonders Duel&#10;Carcassonne&#10;Azul"></textarea><button>Chercher les vendeurs</button></form>
+    <form id="pf"><textarea id="pj" rows="4" aria-label="Jeux recherchés, un par ligne" placeholder="Un jeu par ligne (2 à 50)&#10;7 Wonders Duel&#10;Carcassonne&#10;Azul"></textarea><button>Chercher les vendeurs</button></form>
     <div id="pr" aria-live="polite"></div>
   </section>
 </main>
@@ -685,14 +685,18 @@ $('#pf').addEventListener('submit', async e => {
   e.preventDefault();
   const jeux = $('#pj').value.split(/[\n,;|]+/).map(x => x.trim()).filter(Boolean);
   if (jeux.length < 2) { $('#pr').innerHTML = '<p class="na">Mets au moins 2 jeux (un par ligne).</p>'; return; }
-  $('#pr').innerHTML = '<div class="skel"></div><div class="skel"></div><div class="skel"></div>';
+  // Le workflow espace ses requêtes Okkazeo (anti-bannissement) : ~1,2 s par jeu jamais cherché dans l'heure, instantané sinon.
+  const n = Math.min(jeux.length, 50), debut = Date.now();
+  const attente = () => { $('#pr').innerHTML = `<p class="mut">Recherche de ${n} jeux sur Okkazeo… ${Math.round((Date.now() - debut) / 1000)} s (jusqu'à ~${Math.ceil(n * 1.2)} s ; les jeux déjà cherchés dans l'heure sont instantanés)</p><div class="skel"></div><div class="skel"></div>`; };
+  attente();
+  const minuteur = setInterval(attente, 1000);
   try {
     const r = await fetch(API_PANIER + '?jeux=' + encodeURIComponent(jeux.join('|')));
     if (!r.ok) throw new Error('HTTP ' + r.status);
     $('#pr').innerHTML = panierHtml(await r.json());
   } catch (err) {
     $('#pr').innerHTML = `<p class="na">Recherche impossible (${esc(err.message)}). Réessaie dans un instant.</p>`;
-  }
+  } finally { clearInterval(minuteur); }
 });
 
 majVers();
