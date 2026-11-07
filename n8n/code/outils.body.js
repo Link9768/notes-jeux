@@ -1,4 +1,4 @@
-// Webhook GET ?op=ext|meca|jumeaux&id=<id BGG> | op=suggest&q=<texte> | op=ean&code=<chiffres>
+// Webhook GET ?op=ext|meca|jumeaux&id=<id BGG> | op=suggest&q=<texte> | op=ean&code=<chiffres> | op=videos&q=<titre>&q2=<autre titre>
 const p = $('Webhook').first().json.query || {};
 const op = String(p.op || '');
 const id = String(p.id || '').replace(/\D/g, '').slice(0, 10);
@@ -62,11 +62,30 @@ async function ean(code) {
   return b ? b.title : null;
 }
 
+// Vidéos de règles : Ludochrono (chaîne Ludovox) et Le Chalet (chaîne Un Monde de jeux), recherche dans chaque chaîne
+// (sans clé d'API ; cookie SOCS = refus des cookies, sinon YouTube redirige vers sa page de consentement).
+// Titres essayés dans l'ordre (MyLudo en français, puis BGG) ; une chaîne en panne → null pour elle seule.
+const YT = { 'User-Agent': UA['User-Agent'], 'Accept': 'text/html', 'Accept-Language': 'fr-FR,fr;q=0.9', 'Cookie': 'SOCS=CAI' };
+async function videos(titres) {
+  const cherche = async (chaine, pick) => {
+    for (const t of titres) {
+      const r = await req(`https://www.youtube.com/@${chaine}/search?query=${encodeURIComponent(t)}`, YT).catch(() => null);
+      const v = r && pick(parseYtVideos(String(r.body)), titres);
+      if (v) return v;
+    }
+    return null;
+  };
+  const [ludochrono, chalet] = await Promise.all([cherche('LudovoxFr', pickLudochrono), cherche('UnMondedejeux', pickChalet)]);
+  return { ludochrono, chalet };
+}
+
 const base = `https://api.geekdo.com/api/geekitem/linkeditems?ajax=1&nosession=1&objectid=${id}&pageid=1&sort=rank`;
 try {
   if (op === 'ext' && id) return [{ json: { op, extensions: pickExtensions(await getJson(`${base}&linkdata_index=boardgameexpansion&objecttype=thing&showcount=50&subtype=boardgameexpansion`)) } }];
   if (op === 'meca' && id) return [{ json: { op, jeux: pickTopMeca(await getJson(`${base}&linkdata_index=boardgame&objecttype=property&showcount=25&subtype=boardgamemechanic`)) } }];
   if (op === 'jumeaux' && id) return [{ json: { op, jumeaux: await jumeaux() } }];
+  const titres = [p.q, p.q2].map(x => String(x || '').trim().slice(0, 80)).filter((x, i, a) => x && a.indexOf(x) === i);
+  if (op === 'videos' && titres.length) return [{ json: { op, ...(await videos(titres)) } }];
   if (op === 'suggest') return [{ json: { op, titres: await suggest(String(p.q || '').trim().slice(0, 60)) } }];
   if (op === 'ean' && estEan(p.code)) return [{ json: { op, titre: await ean(String(p.code).trim()) } }];
   return [{ json: { op, erreur: 'paramètres invalides' } }];

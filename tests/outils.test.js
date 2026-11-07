@@ -68,3 +68,25 @@ test('suggestions : titres qui commencent par la saisie d’abord, jeux de base 
   assert.deepEqual(classerSuggestions('skull k', c), ['Skull King', 'Skull King - Extension', 'Skull & Roses', 'Black Skull Island']);
   assert.ok(estEan('3760243850066') && !estEan('123') && !estEan('37602438500a6'));
 });
+
+const page = n => fs.readFileSync(`${__dirname}/fixtures/${n}`, 'utf8');
+const YT = ch => `https://www.youtube.com/@${ch}/search?query=`;
+const ytHttp = pages => o => { const k = Object.keys(pages).find(u => o.url === u); return k ? { statusCode: 200, body: page(pages[k]) } : { statusCode: 404, body: '' }; };
+test('vidéos : Ludochrono de Res Arcana (pas Res Arcana Duo), rien chez le Chalet ; cookie de refus envoyé', async () => {
+  const { out, calls } = await run({ op: 'videos', q: 'Res Arcana', q2: 'Res Arcana' }, ytHttp({ [YT('LudovoxFr') + 'Res%20Arcana']: 'yt-ludovox-res-arcana.html', [YT('UnMondedejeux') + 'Res%20Arcana']: 'yt-umdj-wingspan.html' }));
+  assert.equal(out.ludochrono.titre, 'LudoChrono - Res Arcana');
+  assert.ok(out.ludochrono.url.startsWith('https://www.youtube.com/watch?v=') && out.ludochrono.duree && out.ludochrono.image.includes('i.ytimg.com'));
+  assert.equal(out.chalet, null);
+  assert.ok(calls.every(c => c.headers.Cookie === 'SOCS=CAI'));
+  assert.equal(calls.length, 2); // un seul titre (doublon retiré)
+});
+test('vidéos : Zénith chez le Chalet (« on explique et on joue ») ; titre français puis titre BGG ; YouTube en panne → null', async () => {
+  const { out, calls } = await run({ op: 'videos', q: 'Zénith', q2: 'Zenith' }, ytHttp({ [YT('UnMondedejeux') + 'Z%C3%A9nith']: 'yt-umdj-zenith.html', [YT('LudovoxFr') + 'Zenith']: 'yt-ludovox-wingspan.html' }));
+  assert.match(out.chalet.titre, /^Zénith, on explique et on joue/);
+  assert.equal(out.ludochrono, null);
+  assert.ok(calls.some(c => c.url === YT('LudovoxFr') + 'Zenith')); // 2e titre essayé
+  const ko = await run({ op: 'videos', q: 'Wingspan' }, () => ({ statusCode: 429, body: '' }));
+  assert.deepEqual([ko.out.ludochrono, ko.out.chalet], [null, null]);
+  const vide = await run({ op: 'videos', q: '' }, () => { throw new Error('aucune requête'); });
+  assert.ok(vide.out.erreur);
+});

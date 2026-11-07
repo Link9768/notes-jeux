@@ -351,3 +351,19 @@ test('jumeaux préchargés à l’affichage du jeu (sans attendre le clic)', asy
   await new Promise(r => setTimeout(r, 10));
   assert.ok(urls.some(u => u.includes('notes-jeux-outils?op=jumeaux&id=155987')), urls.join('\n'));
 });
+test('vidéos des règles : cherchées à l’affichage (titre MyLudo puis BGG), encart sous Okkazeo ; rien sans vidéo', async () => {
+  const urls = [];
+  const els = {};
+  const elx = sel => (els[sel] = els[sel] || { innerHTML: '', value: '', addEventListener() {} });
+  const vid = { id: 'np11lHh2nak', titre: 'LudoChrono - Res Arcana', duree: '5:16', url: 'https://www.youtube.com/watch?v=np11lHh2nak', image: 'https://i.ytimg.com/vi/np11lHh2nak/mqdefault.jpg' };
+  const ctx = { document: { querySelector: elx }, location: { search: '' }, history: { replaceState() {} }, URLSearchParams,
+    fetch: async u => { urls.push(String(u)); if (String(u).includes('op=videos')) return { ok: true, json: async () => ({ op: 'videos', ludochrono: vid, chalet: null }) };
+      return String(u).includes('notes-jeux?q=') ? { ok: true, json: async () => ({ query: 'res arcana', myludo: { titre: 'Res Arcana' }, bgg: { id: '262712', titre: 'Res Arcana' }, liens: { bgg: '#' }, okkazeo: null }) } : { ok: false }; } };
+  const f = vm.runInNewContext(`${script}; ({ lancer, videosHtml })`, ctx);
+  f.lancer('res arcana');
+  await new Promise(r => setTimeout(r, 20));
+  assert.ok(urls.some(u => u.includes('op=videos&q=Res%20Arcana&q2=Res%20Arcana')), urls.join('\n'));
+  assert.ok(els['#out'].innerHTML.indexOf('id="videos"') > els['#out'].innerHTML.indexOf('class="okk"'));
+  assert.ok(els['#videos'].innerHTML.includes('▶ Vidéos des règles') && els['#videos'].innerHTML.includes('LudoChrono - Res Arcana') && els['#videos'].innerHTML.includes('5:16'));
+  assert.equal(f.videosHtml({ ludochrono: null, chalet: null }), '');
+});

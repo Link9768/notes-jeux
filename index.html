@@ -88,6 +88,9 @@ button.chip:hover,button.chip.on{background:var(--bgg);color:#fff}
 .bga.plus.on{background:#34c75933;color:var(--ok)}
 .bga.duo{border:0;font-family:inherit;cursor:pointer;background:#4f8cff33;color:var(--acc)}
 .bga.duo:hover{background:#4f8cff66}
+.vids{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px}
+.vid{display:flex;gap:10px;align-items:center;text-decoration:none;color:var(--txt)}
+.vid img{width:120px;height:68px;object-fit:cover;border-radius:8px;flex-shrink:0;background:var(--line)}
 .addl{margin-top:6px}
 .addl summary{cursor:pointer;font-size:12px;color:var(--mut);display:inline-block}
 .addl .chips{margin-top:6px}
@@ -329,10 +332,21 @@ function render(d, games) {
     : `<div class="head"><div><h1>${esc(d.query)}</h1><div class="mut">${bgaBadge(d, games)}${duoBadge(d)}</div>${listesMenu(d)}</div></div>`;
   // Tuile MyLudo minimaliste, comme les boutiques : note, nombre de notes, titre retenu (durée et poids sont dans l'encart BGG).
   const tiles = `<div class="tiles">${tile('Esprit Jeu', 'var(--ej)', d.espritjeu, 5, 'avis', L.espritjeu)}${tile('Philibert', 'var(--ph)', d.philibert, 5, 'avis', L.philibert)}${tile('MyLudo', 'var(--ml)', m && { note: m.note, avis: m.avis, titre: m.titre, url: m.url }, 10, 'notes', L.myludo || '#')}</div>`;
-  $('#out').innerHTML = `${retour()}${ongletsHtml()}${head}${tiles}${bggCard(d, games)}${semblables(d)}${jumeauxBloc(d)}${auteur(m)}${okk(d.okkazeo, L.okkazeo, prixNeuf(d))}`;
+  $('#out').innerHTML = `${retour()}${ongletsHtml()}${head}${tiles}${bggCard(d, games)}${semblables(d)}${jumeauxBloc(d)}${auteur(m)}${okk(d.okkazeo, L.okkazeo, prixNeuf(d))}<div id="videos"></div>`;
   majVers();
   // Jumeaux préchargés en arrière-plan (réponse gardée par outil) : le clic sur 🎯 déplie sans attente.
   if (d.bgg && d.bgg.id) outil({ op: 'jumeaux', id: d.bgg.id }).catch(() => {});
+  // Vidéos des règles (Ludochrono, Le Chalet) : cherchées en arrière-plan, affichées sous l'encart Okkazeo si elles existent.
+  const pv = { op: 'videos', q: (m && m.titre) || d.query };
+  if (d.bgg && d.bgg.titre) pv.q2 = d.bgg.titre;
+  outil(pv).then(v => { const b = $('#videos'); if (affiche === d && b) b.innerHTML = videosHtml(v); }).catch(() => {});
+}
+
+// Encart « Vidéos des règles » : Ludochrono (Ludovox) et Le Chalet (Un Monde de jeux) ; rien si aucune des deux n'existe.
+function videosHtml(v) {
+  const l = [['Ludochrono', v && v.ludochrono], ['Le Chalet · on explique et on joue', v && v.chalet]].filter(x => x[1]);
+  if (!l.length) return '';
+  return `<section class="aut"><h3>▶ Vidéos des règles</h3><div class="vids">${l.map(([src, x]) => `<a class="vid" href="${esc(x.url)}" rel="noopener"><img src="${esc(x.image)}" alt="" loading="lazy"><span><b>${esc(x.titre)}</b><br><span class="mut">${src}${x.duree ? ' · ' + esc(x.duree) : ''}</span></span></a>`).join('')}</div></section>`;
 }
 
 // Comparateur : une colonne par jeu ouvert déjà chargé ; meilleure valeur en vert sur les lignes où « mieux » a un sens.
