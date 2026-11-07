@@ -303,3 +303,14 @@ test('panier : plus de 15 jeux → requêtes Okkazeo espacées d’au moins 0,4 
     assert.ok(c.calls.length > 0);
   } finally { delete globalThis.$getWorkflowStaticData; }
 });
+test('sources : version duo intégrable (Res Arcana → Res Arcana Duo) ; geekitems en panne → duo null sans erreur', async () => {
+  const DUO = JSON.parse(fx('bgg-geekitems-duo.json'));
+  const gi = id => `https://api.geekdo.com/api/geekitems?objectid=${id}&objecttype=thing&nosession=1`;
+  const nodes = { Webhook: { query: { q: 'clank' } }, 'BGG Fiche': { bgg: { note: 7.6, titre: 'Res Arcana', url: 'https://boardgamegeek.com/boardgame/262712' } } };
+  const over = Object.fromEntries(Object.keys(DUO).map(id => [gi(id), { statusCode: 200, body: DUO[id] }]));
+  const { out } = await run('sources', { nodes, http: serve(over) });
+  assert.deepEqual(out.duo, { titre: 'Res Arcana Duo', url: 'https://boardgamegeek.com/boardgame/427345/res-arcana-duo', integrable: true });
+  const panne = await run('sources', { nodes, http: serve() });
+  assert.equal(panne.out.duo, null);
+  assert.ok(!panne.out.erreurs.some(e => /duo|geekitems/.test(e)), JSON.stringify(panne.out.erreurs));
+});

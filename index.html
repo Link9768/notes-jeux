@@ -86,6 +86,8 @@ button.chip:hover,button.chip.on{background:var(--bgg);color:#fff}
 .lien{background:none;border:0;padding:0;color:var(--acc);font:inherit;font-size:inherit;font-weight:400;cursor:pointer;text-align:left}
 .bga.plus{border:0;font-family:inherit;cursor:pointer;background:var(--line);color:var(--txt);margin-left:3px}
 .bga.plus.on{background:#34c75933;color:var(--ok)}
+.bga.duo{border:0;font-family:inherit;cursor:pointer;background:#4f8cff33;color:var(--acc)}
+.bga.duo:hover{background:#4f8cff66}
 .addl{margin-top:6px}
 .addl summary{cursor:pointer;font-size:12px;color:var(--mut);display:inline-block}
 .addl .chips{margin-top:6px}
@@ -283,6 +285,15 @@ function bgaBadge(d, games) {
     + `<button type="button" class="bga plus${dans ? ' on' : ''}" data-liste="${esc(LISTE_BGA)}" title="Ma liste « ${esc(LISTE_BGA)} »">${dans ? '✓' : '+'}</button>`;
 }
 
+// Pastille « Duo » : version 2 joueurs du jeu (BGG), « Duo ! » si elle s'intègre au jeu de base (ses cartes s'ajoutent
+// au jeu d'origine, ex. Res Arcana Duo, Wingspan Asia). Clic = page du duo dans l'appli.
+function duoBadge(d) {
+  const u = d && d.duo;
+  if (!u) return '';
+  const aide = u.integrable ? ' : intégrable au jeu de base, ses cartes s’ajoutent au jeu d’origine' : ' : version 2 joueurs';
+  return `<button type="button" class="bga duo" data-q="${esc(u.titre)}" title="${esc(u.titre + aide)}">Duo${u.integrable ? ' !' : ''}</button>`;
+}
+
 // Pied de l'encart BGG : page BoardGameGeek du jeu (lien direct si connu, repli par l'identifiant BGA, sinon recherche).
 function liens(d, games) {
   const bga = findBga([d.query, d.myludo && d.myludo.titre], games);
@@ -314,12 +325,14 @@ function render(d, games) {
   affiche = d;
   const m = d.myludo, L = d.liens;
   const head = m
-    ? `<div class="head">${m.image ? `<img src="${esc(m.image)}" alt="">` : ''}<div><h1>${esc(m.titre)}</h1><div class="mut">${[m.annee, m.joueurs && m.joueurs + ' joueurs', m.age].filter(Boolean).map(esc).join(' · ')}${bgaBadge(d, games)}</div>${listesMenu(d)}</div></div>`
-    : `<div class="head"><div><h1>${esc(d.query)}</h1><div class="mut">${bgaBadge(d, games)}</div>${listesMenu(d)}</div></div>`;
+    ? `<div class="head">${m.image ? `<img src="${esc(m.image)}" alt="">` : ''}<div><h1>${esc(m.titre)}</h1><div class="mut">${[m.annee, m.joueurs && m.joueurs + ' joueurs', m.age].filter(Boolean).map(esc).join(' · ')}${bgaBadge(d, games)}${duoBadge(d)}</div>${listesMenu(d)}</div></div>`
+    : `<div class="head"><div><h1>${esc(d.query)}</h1><div class="mut">${bgaBadge(d, games)}${duoBadge(d)}</div>${listesMenu(d)}</div></div>`;
   // Tuile MyLudo minimaliste, comme les boutiques : note, nombre de notes, titre retenu (durée et poids sont dans l'encart BGG).
   const tiles = `<div class="tiles">${tile('Esprit Jeu', 'var(--ej)', d.espritjeu, 5, 'avis', L.espritjeu)}${tile('Philibert', 'var(--ph)', d.philibert, 5, 'avis', L.philibert)}${tile('MyLudo', 'var(--ml)', m && { note: m.note, avis: m.avis, titre: m.titre, url: m.url }, 10, 'notes', L.myludo || '#')}</div>`;
   $('#out').innerHTML = `${retour()}${ongletsHtml()}${head}${tiles}${bggCard(d, games)}${semblables(d)}${jumeauxBloc(d)}${auteur(m)}${okk(d.okkazeo, L.okkazeo, prixNeuf(d))}`;
   majVers();
+  // Jumeaux préchargés en arrière-plan (réponse gardée par outil) : le clic sur 🎯 déplie sans attente.
+  if (d.bgg && d.bgg.id) outil({ op: 'jumeaux', id: d.bgg.id }).catch(() => {});
 }
 
 // Comparateur : une colonne par jeu ouvert déjà chargé ; meilleure valeur en vert sur les lignes où « mieux » a un sens.

@@ -87,6 +87,12 @@ Plusieurs jeux dans la barre (« Abyss, Clank, Azul », virgule ou point-virgule
 - **Extensions** : le titre d'une extension ouvre sa page de jeu dans l'appli (recherche par titre BGG anglais, vérifié : « Abyss: Kraken » trouvé par BGG, MyLudo, Philibert, Esprit Jeu).
 - **Liens externes dans le même onglet** (plus de `target="_blank"`, qui déclenchait « pop-up bloqué » sur mobile).
 
+## Duo et Jumeaux préchargés (2026-11-07)
+
+- **Pastille « Duo »** à côté de BGA (`duoBadge`), « Duo ! » si le duo s'intègre au jeu de base ; clic = page du duo dans l'appli. Node Sources → `duo: {titre, url, integrable}` (`duoBgg` + `pickDuo` dans `lib/bgg.js`) : fiche `api.geekdo.com/api/geekitems` du jeu (sans token), candidats = liens `boardgameintegration` + `reimplementation` (6 max), duo = famille **« Versions & Editions: Two-Player Versions of More-Player Games »** (le nombre de joueurs ne suffit pas : Wingspan Asia est noté 1-7), intégrable = dans `boardgameintegration`. Vérifié : Res Arcana → Res Arcana Duo !, Wingspan → Wingspan Asia !, Abyss/Clank → rien. Panne → `duo: null` sans erreur. ~0,3 s en parallèle de MyLudo : temps de recherche inchangé (2,0–2,7 s mesurés). Fixture : `tests/fixtures/bgg-geekitems-duo.json`.
+- **Jumeaux préchargés** : `render` lance `outil({op:'jumeaux'})` en arrière-plan (jeu affiché seulement, pas les onglets en fond) ; le clic sur 🎯 déplie sans attente. Coût : ~25 requêtes geekdo par jeu affiché.
+- **Déploiement d'un gros node** (Sources ≈ 45 Ko) : recopier le bundle dans l'outil MCP est risqué ; un script GET workflow → remplace `jsCode` du seul node → PUT (même effet qu'une mise à jour partielle, credentials conservés), puis `verify-deployed.mjs`. Changer `lib/bgg.js` impose de redéployer les 4 nodes qui l'embarquent (BGG Candidats, BGG Fiche, Sources, Outils).
+
 ## Sécurité
 
 Les webhooks sont publics. La recherche déclenche environ 8 requêtes vers des sites tiers par appel (2 par boutique + 2 BGG) : acceptable pour un usage perso. Si besoin, ajouter une clé simple dans l'URL et la vérifier dans un node du workflow.

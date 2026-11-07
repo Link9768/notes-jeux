@@ -117,8 +117,9 @@ async function myludo() {
 }
 
 // Jeux similaires = recommandations des joueurs BGG pour le jeu retenu par les nodes BGG (voir pickBggRecs).
+const idBgg = bgg && bgg.url && (String(bgg.url).match(/\/boardgame\/(\d+)/) || [])[1];
 async function recsBgg() {
-  const id = bgg && bgg.url && (String(bgg.url).match(/\/boardgame\/(\d+)/) || [])[1];
+  const id = idBgg;
   if (!id) return null;
   const r = await getFull(`https://api.geekdo.com/api/geekitem/recs?objectid=${id}&objecttype=thing`, { ...UA, 'Accept': 'application/json' });
   if (r.statusCode >= 400) throw new Error(`HTTP ${r.statusCode} geekitem/recs`);
@@ -126,15 +127,29 @@ async function recsBgg() {
   return pickBggRecs(typeof r.body === 'string' ? JSON.parse(r.body) : r.body, bgg.titre);
 }
 
-const [ej, ph, ok, ml, sim] = await Promise.allSettled([
+// Version duo du jeu (voir pickDuo) : fiche geekitems du jeu, puis de ses jeux liés (6 au plus, en parallèle).
+// Facultative : panne → null, sans erreur affichée. En parallèle de MyLudo (plus lent) : ne rallonge pas la recherche.
+async function duoBgg() {
+  if (!idBgg) return null;
+  const item = async x => {
+    const r = await getFull(`https://api.geekdo.com/api/geekitems?objectid=${x}&objecttype=thing&nosession=1`, { ...UA, 'Accept': 'application/json' });
+    if (r.statusCode >= 400) throw new Error(`HTTP ${r.statusCode} geekitems`);
+    return (typeof r.body === 'string' ? JSON.parse(r.body) : r.body).item;
+  };
+  const base = await item(idBgg);
+  return pickDuo(base, await Promise.all(duoCandidats(base).ids.map(x => item(x).catch(() => null))));
+}
+
+const [ej, ph, ok, ml, sim, du] = await Promise.allSettled([
   boutique(liens.espritjeu, parseEspritJeuSearch, 'latin1'),
   boutique(liens.philibert, parsePhilibertSearch),
   okkazeo(),
   myludo(),
   recsBgg(),
+  duoBgg(),
 ]);
 const val = r => (r.status === 'fulfilled' ? r.value : null);
 // Lien direct vers la page BoardGameGeek, lu dans la fiche Okkazeo (null si inconnu : la page propose alors la recherche BGG).
 const bggUrl = (val(ok) || {}).bggUrl || null;
 const erreurs = [ej, ph, ok, ml, sim].map((r, i) => r.status === 'rejected' ? `${['espritjeu', 'philibert', 'okkazeo', 'myludo', 'bgg-recs'][i]}: ${(r.reason && r.reason.message) || String(r.reason)}` : null).filter(Boolean);
-return [{ json: { query: q, espritjeu: val(ej), philibert: val(ph), bgg, okkazeo: val(ok), myludo: val(ml), similaires: val(sim), bggUrl, liens, erreurs } }];
+return [{ json: { query: q, espritjeu: val(ej), philibert: val(ph), bgg, okkazeo: val(ok), myludo: val(ml), similaires: val(sim), duo: val(du), bggUrl, liens, erreurs } }];

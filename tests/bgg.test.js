@@ -110,3 +110,19 @@ test('recommandations BGG : doublons de nom de base retirés, réponse vide ou a
   assert.deepEqual(pickBggRecs({}, 'X'), []);
   assert.deepEqual(pickBggRecs(null, 'X'), []);
 });
+
+const DUO = require('./fixtures/bgg-geekitems-duo.json');
+const { duoCandidats, pickDuo } = require('../lib/bgg.js');
+const fichesDe = base => duoCandidats(base).ids.map(id => (DUO[id] ? DUO[id].item : null));
+test('duo : Res Arcana → Res Arcana Duo intégrable ; Wingspan → Wingspan Asia intégrable (pas Wyrmspan ni Pocket)', () => {
+  const ra = DUO[262712].item, ws = DUO[266192].item;
+  assert.deepEqual(pickDuo(ra, fichesDe(ra)), { titre: 'Res Arcana Duo', url: 'https://boardgamegeek.com/boardgame/427345/res-arcana-duo', integrable: true });
+  assert.deepEqual(pickDuo(ws, fichesDe(ws)), { titre: 'Wingspan Asia', url: 'https://boardgamegeek.com/boardgame/366161/wingspan-asia', integrable: true });
+});
+test('duo : jeu déjà à 2 joueurs, aucun candidat duo, fiches absentes → null ; duo non intégrable → integrable false', () => {
+  assert.equal(pickDuo(DUO[427345].item, [DUO[262712].item]), null);
+  const ws = DUO[266192].item;
+  assert.equal(pickDuo(ws, [DUO[410201].item, null]), null);
+  const sansInteg = { ...ws, links: { ...ws.links, boardgameintegration: [], reimplementation: [{ objectid: '366161' }] } };
+  assert.equal(pickDuo(sansInteg, [DUO[366161].item]).integrable, false);
+});

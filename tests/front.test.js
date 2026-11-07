@@ -333,3 +333,21 @@ test('jusqu’à 20 jeux dans la barre, chargés 6 à la fois', async () => {
   assert.equal(f.onglets().length, 20);
   assert.equal(appels.length, 20);
 });
+test('pastille Duo : « Duo ! » si intégrable, « Duo » sinon, clic = page du duo dans l’appli ; rien sans duo', () => {
+  const f = vm.runInNewContext(`${script}; ({ duoBadge })`, { document: { querySelector: el }, location: { search: '' }, history: {}, fetch: async () => { throw new Error('x'); }, URLSearchParams });
+  const h = f.duoBadge({ duo: { titre: 'Res Arcana Duo', url: 'u', integrable: true } });
+  assert.ok(h.includes('class="bga duo"') && h.includes('data-q="Res Arcana Duo"') && h.includes('>Duo !<'), h);
+  assert.ok(f.duoBadge({ duo: { titre: 'X', url: 'u', integrable: false } }).includes('>Duo<'));
+  assert.equal(f.duoBadge({ duo: null }), '');
+});
+test('jumeaux préchargés à l’affichage du jeu (sans attendre le clic)', async () => {
+  const urls = [];
+  const els = {};
+  const elx = sel => (els[sel] = els[sel] || { innerHTML: '', value: '', addEventListener() {} });
+  const ctx = { document: { querySelector: elx }, location: { search: '' }, history: { replaceState() {} }, URLSearchParams,
+    fetch: async u => { urls.push(String(u)); return String(u).includes('notes-jeux?q=') ? { ok: true, json: async () => ({ query: 'abyss', myludo: null, bgg: { id: '155987', note: 7.3 }, liens: { bgg: '#' }, okkazeo: null }) } : { ok: false }; } };
+  const f = vm.runInNewContext(`${script}; ({ lancer })`, ctx);
+  f.lancer('abyss');
+  await new Promise(r => setTimeout(r, 10));
+  assert.ok(urls.some(u => u.includes('notes-jeux-outils?op=jumeaux&id=155987')), urls.join('\n'));
+});
