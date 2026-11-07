@@ -346,7 +346,7 @@ function render(d, games) {
 function videosHtml(v) {
   const l = [['Ludochrono', v && v.ludochrono], ['Le Chalet · on explique et on joue', v && v.chalet]].filter(x => x[1]);
   if (!l.length) return '';
-  return `<section class="aut"><h3>▶ Vidéos des règles</h3><div class="vids">${l.map(([src, x]) => `<a class="vid" href="${esc(x.url)}" rel="noopener"><img src="${esc(x.image)}" alt="" loading="lazy"><span><b>${esc(x.titre)}</b><br><span class="mut">${src}${x.duree ? ' · ' + esc(x.duree) : ''}</span></span></a>`).join('')}</div></section>`;
+  return `<section class="aut"><h3>▶ Vidéos des règles</h3><div class="vids">${l.map(([src, x]) => `<a class="vid" href="${esc(x.url)}" target="_blank" rel="noopener"><img src="${esc(x.image)}" alt="" loading="lazy"><span><b>${esc(x.titre)}</b><br><span class="mut">${src}${x.duree ? ' · ' + esc(x.duree) : ''}</span></span></a>`).join('')}</div></section>`;
 }
 
 // Comparateur : une colonne par jeu ouvert déjà chargé ; meilleure valeur en vert sur les lignes où « mieux » a un sens.

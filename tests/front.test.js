@@ -365,5 +365,6 @@ test('vidéos des règles : cherchées à l’affichage (titre MyLudo puis BGG),
   assert.ok(urls.some(u => u.includes('op=videos&q=Res%20Arcana&q2=Res%20Arcana')), urls.join('\n'));
   assert.ok(els['#out'].innerHTML.indexOf('id="videos"') > els['#out'].innerHTML.indexOf('class="okk"'));
   assert.ok(els['#videos'].innerHTML.includes('▶ Vidéos des règles') && els['#videos'].innerHTML.includes('LudoChrono - Res Arcana') && els['#videos'].innerHTML.includes('5:16'));
+  assert.ok(els['#videos'].innerHTML.includes('target="_blank" rel="noopener"')); // vidéo = nouvel onglet
   assert.equal(f.videosHtml({ ludochrono: null, chalet: null }), '');
 });

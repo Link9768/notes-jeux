@@ -85,7 +85,7 @@ Plusieurs jeux dans la barre (« Abyss, Clank, Azul », virgule ou point-virgule
 
 - **Mes listes** : « À essayer », « À acheter », « À tester sur BGA » (fixes) + listes créées. `localStorage` clé `notesJeux.listes` = **propres à l'appareil/navigateur** (pas de synchro). « ＋ Liste » sous le titre du jeu (pastilles = ajout/retrait, titre stocké = titre MyLudo), « + » à côté de « BGA ✓ » → « À tester sur BGA ». Écran `📋 Mes listes` (bouton sous la recherche) : jeux cliquables (= 🔍), ✕, 🛒 → matchmaking, suppression des listes créées.
 - **Extensions** : le titre d'une extension ouvre sa page de jeu dans l'appli (recherche par titre BGG anglais, vérifié : « Abyss: Kraken » trouvé par BGG, MyLudo, Philibert, Esprit Jeu).
-- **Liens externes dans le même onglet** (plus de `target="_blank"`, qui déclenchait « pop-up bloqué » sur mobile).
+- **Liens externes dans le même onglet** (plus de `target="_blank"`, qui déclenchait « pop-up bloqué » sur mobile), **sauf les vidéos YouTube** (nouvel onglet, voulu).
 
 ## Duo et Jumeaux préchargés (2026-11-07)
 
