@@ -180,14 +180,14 @@ function ligneJeu(s) {
   return `<div class="sim"><span>${titre} <span class="mut">${s.annee ?? ''}</span>${go}</span><span>${s.note != null ? `<b>${fr(s.note)}</b><span class="mut">/10</span>` : ''}</span></div>`;
 }
 
-// Encart « Semblable à » : recommandations des joueurs BGG (note BGG sur 10).
+// Encart « Les joueurs aiment aussi » : recommandations des joueurs BGG (note BGG sur 10).
 function semblables(d) {
   const s = d && d.similaires;
   if (!s || !s.length) return '';
-  return `<section class="aut"><h3>Semblable à · recommandations BGG</h3><div class="autjeux">${s.map(ligneJeu).join('')}</div></section>`;
+  return `<section class="aut"><h3>Les joueurs aiment aussi · recommandations BGG</h3><div class="autjeux">${s.map(ligneJeu).join('')}</div></section>`;
 }
 
-// Encart dépliable « Jumeaux » : 1 ou 2 jeux quasi identiques (calcul du workflow Outils, au clic).
+// Encart dépliable « Jumeaux » : jusqu à 4 jeux quasi identiques (calcul du workflow Outils, au clic).
 function jumeauxBloc(d) {
   const id = d && d.bgg && d.bgg.id;
   return id ? `<section class="aut"><button type="button" class="depli" data-jum="${esc(id)}" aria-expanded="false">🎯 Jumeaux · les jeux les plus proches ▸</button><div class="box" id="jumbox"></div></section>` : '';

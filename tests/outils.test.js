@@ -20,7 +20,7 @@ const depuis = rep => o => (rep[o.url] ? { statusCode: 200, body: JSON.parse(rep
 
 test('jumeaux de Skull King : Skull Queen et Wizard (absent des recommandations BGG), avec la raison en français', async () => {
   const { out, calls } = await run({ op: 'jumeaux', id: '150145' }, depuis(fx('outils-jumeaux-skullking.json')));
-  assert.deepEqual(out.jumeaux.map(j => j.titre), ['Skull Queen', 'Wizard']);
+  assert.deepEqual(out.jumeaux.map(j => j.titre), ['Skull Queen', 'Wizard', 'Sluff Off!', 'Mythical Dice']); // 4 jumeaux au plus (2 avant le 2026-11-11)
   assert.deepEqual(out.jumeaux[1].raison, ['Pari sur ses résultats', 'Plis', 'Gestion de main']);
   assert.ok(out.jumeaux.every(j => j.url.startsWith('https://boardgamegeek.com/boardgame/') && j.score >= 0.2));
   assert.ok(calls.length <= 30 && calls.every(c => c.timeout));

@@ -208,9 +208,9 @@ test('tuile BGG : durée et poids affichés sous la note', () => {
   assert.ok(!sans.includes('⏱') && !sans.includes('⚖')); // les autres sources n'ont ni durée ni poids
 });
 
-test('encart « Semblable à » : recommandations BGG avec note et bouton 🔍 ; rien si absentes', () => {
+test('encart « Les joueurs aiment aussi » : recommandations BGG avec note et bouton 🔍 ; rien si absentes', () => {
   const h = front.semblables({ similaires: [{ titre: 'Everdell', annee: 2018, url: 'https://boardgamegeek.com/boardgame/199792/everdell', note: 8 }] });
-  assert.ok(h.includes('Semblable à · recommandations BGG') && h.includes('Everdell') && h.includes('href="https://boardgamegeek.com/boardgame/199792/everdell"') && h.includes('data-q="Everdell"'));
+  assert.ok(h.includes('Les joueurs aiment aussi · recommandations BGG') && h.includes('Everdell') && h.includes('href="https://boardgamegeek.com/boardgame/199792/everdell"') && h.includes('data-q="Everdell"'));
   assert.equal(front.semblables({ similaires: null }), '');
   assert.equal(front.semblables({ similaires: [] }), '');
 });
