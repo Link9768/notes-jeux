@@ -3,7 +3,10 @@
 (function () {
   const BASE = 'https://link9768.github.io/notes-jeux/';
   if (!/leboncoin\.fr$/.test(location.hostname)) { alert("Ouvre d'abord Leboncoin depuis le bouton Leboncoin de Notes Jeux, puis relance ce favori."); return; }
-  if (window.__njLbc) { window.__njLbc.montre(); return; }
+  // Relancé pendant une recherche : on réaffiche le panneau. Relancé après : l'ancien panneau est retiré et tout est refait
+  // (avant, l'ancien résultat était réaffiché et passait pour une nouvelle recherche).
+  if (window.__njLbc && window.__njLbc.enCours) { window.__njLbc.montre(); return; }
+  if (window.__njLbc) window.__njLbc.retire();
 
   const CAPTCHA = new Error('captcha');
   const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -30,7 +33,7 @@
   document.documentElement.appendChild(hote);
   const dessine = html => { racine.getElementById('c').innerHTML = html; };
   const message = m => dessine(`<p class="msg">${m}</p>`);
-  window.__njLbc = { montre() { hote.style.display = ''; } };
+  window.__njLbc = { enCours: true, montre() { hote.style.display = ''; }, retire() { hote.remove(); } };
 
   const charge = src => new Promise((ok, ko) => {
     const s = document.createElement('script');
@@ -115,5 +118,5 @@
       } catch (e) { if (e === CAPTCHA) return captcha(); }
     }
     maj();
-  })();
+  })().finally(() => { if (window.__njLbc) window.__njLbc.enCours = false; });
 })();
