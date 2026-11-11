@@ -105,7 +105,8 @@ test('lots : description lue sur la page de l’annonce (vraie annonce du 2026-1
 });
 test('lots : jeux de la liste trouvés dans la description (expression entière, accents et casse ignorés)', () => {
   const b = parseAnnonceBody(LOT);
-  assert.deepEqual(jeuxDansTexte(b, ['Just One', 'Abyss', '7 Wonders Duel', 'Galerapagos', 'Scout', 'Azul']), ['Just One', 'Abyss', '7 Wonders Duel', 'Galerapagos']);
+  // « 7 wonders duel agora 15€ » : édition « Agora » = autre libellé, non compté (règle stricte, comme les titres).
+  assert.deepEqual(jeuxDansTexte(b, ['Just One', 'Abyss', '7 Wonders Duel', 'Galerapagos', 'Scout', 'Azul', 'Dice Forge', 'Insider']), ['Just One', 'Abyss', 'Galerapagos', 'Dice Forge', 'Insider']);
   assert.deepEqual(jeuxDansTexte('Lot : just dance, one piece, Azul', ['Just One', 'Azul']), ['Azul']); // « just » et « one » séparés ≠ Just One
 });
 test('lots : candidats = annonces de la recherche dont le titre ne nomme pas le jeu (le jeu est dans la description), jeux vidéo exclus', () => {
@@ -126,7 +127,8 @@ test('annonceCorrespond : une lettre d’écart tolérée (5 lettres et plus), m
   const ok = (j, t) => assert.equal(annonceCorrespond(j, t), true, `${j} / ${t}`);
   const ko = (j, t) => assert.equal(annonceCorrespond(j, t), false, `${j} / ${t}`);
   ok('dice thrones', 'Dice Throne'); ok('Dice Throne', 'Jeu dice thrones'); ok('tiny moutains goats', 'Tiny Mountains Goats');
-  ok('minirogue', 'Mini Rogue'); ok('mini rogue', 'Minirogue VF'); ok('Pikomino', 'Pickomino');
+  ok('Pikomino', 'Pickomino');
+  ko('minirogue', 'Mini Rogue'); ko('El dorado', 'Eldorado'); ko('Eldorado', 'El Dorado'); // jamais de tolérance sur les espaces : d'autres jeux
   ok('Scout', 'Jeu de société Oink Games Scout original neuf sous blister règles Français et Anglais et dE et ES');
   ko('Azul', 'Azur'); // moins de 5 lettres : pas de tolérance
   ko('Scout', 'Sergent scout'); ko('Scout', 'Insert 3D pour le jeu Scout'); ko('Scout', 'Scout Space Wolves metal');
@@ -136,4 +138,11 @@ test('panneau : jeux à 0 annonce en fin de recherche → rappel de vérifier l�
   const fin = panneauHtml({ fait: 2, total: 2, jeux: [{ demande: 'minirogue', annonces: 0 }, { demande: 'Azul', annonces: 3 }], vendeurs: [] });
   assert.ok(fin.includes('vérifie l’orthographe'));
   assert.ok(!panneauHtml({ fait: 1, total: 2, jeux: [{ demande: 'minirogue', annonces: 0 }], vendeurs: [] }).includes('orthographe'));
+});
+
+test('lots : un jeu de la liste ne compte que si l’élément de la description EST ce jeu (cas réels du 2026-11-12)', () => {
+  const texte = 'Je vends :\n- Munchkin Apocalypse 15€\n- Magic Tireless Pilgrim\n- Just One 12e\n- Pilgrims TBE 20 €, Apocalypse (neuf) 25€\n- Galerapagos + extension';
+  assert.deepEqual(jeuxDansTexte(texte, ['Apocalypse', 'Pilgrims', 'Just One', 'Galerapagos', 'Munchkin']), ['Apocalypse', 'Pilgrims', 'Just One', 'Galerapagos']);
+  assert.deepEqual(jeuxDansTexte('- Munchkin Apocalypse 15€ - Tireless Pilgrim', ['Apocalypse', 'Pilgrim']), []);
+  assert.deepEqual(jeuxDansTexte('je vends just one et abyss', ['Just One', 'Abyss']), ['Just One', 'Abyss']);
 });

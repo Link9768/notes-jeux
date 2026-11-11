@@ -16,7 +16,12 @@ const thing = `<items>
 <statistics page="1"><ratings><usersrated value="45678"/><average value="7.68"/><bayesaverage value="7.4"/><averageweight value="2.2367"/></ratings></statistics></item>
 </items>`;
 
-test('search', () => assert.deepEqual(parseBggSearch(search)[1], { id: '201809', type: 'boardgame', name: 'Clank!' }));
+test('search', () => assert.deepEqual(parseBggSearch(search)[1], { id: '201809', type: 'boardgame', name: 'Clank!', primaire: false }));
+test('candidats : un nom principal exact écarte les noms alternatifs exacts (« El Dorado » ≠ Eldorado, alias El Dorado, plus voté)', () => {
+  const xml = '<items><item type="boardgame" id="2140"><name type="alternate" value="El Dorado"/></item>'
+    + '<item type="boardgame" id="11910"><name type="primary" value="El Dorado"/></item><item type="boardgame" id="217372"><name type="primary" value="The Quest for El Dorado"/></item></items>';
+  assert.deepEqual(bggCandidates('el dorado', parseBggSearch(xml)), ['11910']);
+});
 test('candidats : nom exact (alternate inclus), puis jeu dont le nom de base est la recherche', () => assert.deepEqual(bggCandidates('clank', parseBggSearch(search)), ['201809', '201808']));
 test('candidats : sinon tous les mots', () => assert.deepEqual(bggCandidates('clank sunken', parseBggSearch(search)), ['231000']));
 test('candidats : rien → []', () => assert.deepEqual(bggCandidates('azertyuiop', parseBggSearch(search)), []));

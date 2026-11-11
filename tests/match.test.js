@@ -67,3 +67,10 @@ test('variantes de recherche : au singulier en second essai, rien si déjà au s
   assert.deepEqual(variantesRecherche('Clank'), ['Clank']);
   assert.deepEqual(variantesRecherche('7 Wonders Duel'), ['7 Wonders Duel', '7 wonder duel']);
 });
+
+test('une lettre d’écart, jamais sur les espaces : « el dorado » ne prend pas « Eldorado » (autre jeu)', () => {
+  const c = [{ title: 'Eldorado', url: 'eldorado' }, { title: 'La course vers El Dorado', url: 'course' }];
+  assert.equal(pickProduct('el dorado', c).url, 'course');
+  assert.equal(pickProduct('eldorado', [{ title: 'El Dorado', url: 'el' }]), null);
+  assert.equal(pickProduct('catane', [{ title: 'Catan', url: 'catan' }]).url, 'catan'); // dans un mot : toujours toléré
+});
