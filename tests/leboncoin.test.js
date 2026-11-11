@@ -34,9 +34,22 @@ test('annonceCorrespond : mots entiers, pluriels, accents ; lots et jeux vidéo 
   ko('Clank', '❗️220 Jeux Sociétés Liste de A à L'); ko('Azul', 'Lot Azul + Splendor');
   ko('Azul', 'Azulejos'); ko('Catan', 'Jeu Switch Catan');
 });
+test('annonceCorrespond : variantes et extensions seules écartées (titres réels du 2026-11-11), mots génériques acceptés', () => {
+  const ok = (j, t) => assert.equal(annonceCorrespond(j, t), true, `${j} / ${t}`);
+  const ko = (j, t) => assert.equal(annonceCorrespond(j, t), false, `${j} / ${t}`);
+  ko('Splendor', 'Splendor marvel'); ko('Azul', 'AZUL - Les vitraux de Sintra'); ko('Patchwork', 'Patchwork express version anglaise jeu neuf sous cellophane');
+  ko('Carcassonne', 'Jeu de société mon premier Carcassonne'); ko('Carcassonne', 'Carcassonne extension la tour');
+  ko('Les Aventuriers du Rail', 'Les aventuriers du rail usa'); ko('Les Aventuriers du Rail', 'Neuf Jeu les aventuriers du rail New York Days of Wonder');
+  ok('Dixit', 'Jeu de société DIXIT'); ok('Codenames', 'Jeu de société Codenames'); ok('7 Wonders Duel', '7 wonders duel - asmode');
+  ok('Azul', 'Jeu Azul'); ok('Splendor', 'Splendor'); ok('Hanabi', 'Hanabi'); ok('Takenoko', 'Takenoko neuf sous blister');
+  ok('Carcassonne', 'Carcassonne base + extension rivière'); ok('Clank', 'Clank + extension Trésors engloutis'); // le jeu de base est dedans
+  ko('Clank', 'Clank Extensions + insert 3D'); ko('Azul', 'Extension Azul pavillon etincellant'); ko('Azul', 'Azul Duel - je de société');
+  ok('Patchwork', 'Patchwork version anglaise TBE');
+});
 test('fixture clank : ni Ratchet ni lot parmi les annonces retenues', () => {
   const r = annoncesLbc(clank, 'Clank');
-  assert.ok(r.length > 20 && r.length < clank.ads.length, String(r.length));
+  assert.ok(r.length >= 5 && r.length < clank.ads.length, String(r.length)); // variantes (Legacy, dans l'espace…) écartées aussi
+  assert.ok(r.every(a => !/legacy|espace|rangement/i.test(a.etat)), r.map(a => a.etat).join('\n'));
   assert.ok(r.every(a => !/ratchet|\blots?\b/i.test(a.etat)), r.map(a => a.etat).join('\n'));
 });
 
