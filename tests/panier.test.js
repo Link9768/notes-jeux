@@ -45,3 +45,13 @@ test('liste de jeux : virgules, retours à la ligne ou |, doublons et vides reti
   assert.equal(parseListeJeux(Array.from({ length: 60 }, (_, i) => 'j' + i).join(',')).length, 50);
   assert.deepEqual(parseListeJeux(undefined), []);
 });
+test('vendeurs : la clé (Leboncoin : user_id) prime sur le pseudo ; sans clé, le pseudo comme avant', () => {
+  const a = (vendeur, cle, prix) => ({ ...ann(vendeur, prix), cle });
+  // deux « Alice » de clés différentes : pas le même vendeur
+  assert.deepEqual(matchVendeurs([{ titre: 'A', annonces: [a('Alice', 'u1', 5)] }, { titre: 'B', annonces: [a('Alice', 'u2', 6)] }], CPS), []);
+  // même clé, pseudos différents : regroupés
+  const v = matchVendeurs([{ titre: 'A', annonces: [a('Alice', 'u1', 5)] }, { titre: 'B', annonces: [a('Alicia', 'u1', 6)] }], CPS);
+  assert.deepEqual([v.length, v[0].nbJeux, v[0].total], [1, 2, 11]);
+  // sans clé : pseudo, casse ignorée
+  assert.equal(matchVendeurs([{ titre: 'A', annonces: [ann('Zoe', 5)] }, { titre: 'B', annonces: [ann('zoe', 6)] }], CPS).length, 1);
+});

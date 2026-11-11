@@ -114,6 +114,10 @@ button.chip:hover,button.chip.on{background:var(--bgg);color:#fff}
 .panier form{display:flex;gap:8px;padding:12px;margin:0;align-items:flex-start}
 .panier textarea{flex:1;min-width:0;padding:10px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--txt);font:inherit;font-size:15px;resize:vertical}
 .panier button{background:var(--okk)}
+.panier button#plbc{background:#ec5a13}
+.panier .bts{display:flex;flex-direction:column;gap:8px}
+.panier details{padding:0 12px 12px;font-size:12px;color:var(--mut)}
+.panier details input{width:100%;box-sizing:border-box;margin:6px 0}
 #pr{padding:0 12px 12px;display:grid;gap:10px}
 .vend{border:1px solid var(--line);border-radius:10px;padding:10px}
 .vend .top{display:flex;flex-wrap:wrap;gap:4px 8px;align-items:baseline;margin-bottom:4px}
@@ -132,7 +136,12 @@ button.chip:hover,button.chip.on{background:var(--bgg);color:#fff}
   <div id="out" aria-live="polite"></div>
   <section class="panier">
     <header><b>Matchmaking Okkazeo</b><span>vendeurs qui ont plusieurs jeux de ta liste</span></header>
-    <form id="pf"><textarea id="pj" rows="4" aria-label="Jeux recherchés, un par ligne" placeholder="Un jeu par ligne (2 à 50)&#10;7 Wonders Duel&#10;Carcassonne&#10;Azul"></textarea><button>Chercher les vendeurs</button></form>
+    <form id="pf"><textarea id="pj" rows="4" aria-label="Jeux recherchés, un par ligne" placeholder="Un jeu par ligne (2 à 50)&#10;7 Wonders Duel&#10;Carcassonne&#10;Azul"></textarea><div class="bts"><button>Chercher les vendeurs</button><button type="button" id="plbc">Leboncoin</button></div></form>
+    <details><summary>Installer le favori Matchmaking LBC</summary>
+      <p><a href="javascript:(()=>{const s=document.createElement('script');s.src='https://link9768.github.io/notes-jeux/lbc.js?'+Date.now();document.body.appendChild(s)})()">Matchmaking LBC</a></p>
+      <input readonly value="javascript:(()=>{const s=document.createElement('script');s.src='https://link9768.github.io/notes-jeux/lbc.js?'+Date.now();document.body.appendChild(s)})()" aria-label="Code du favori">
+      <p>PC : glisse le lien dans ta barre de favoris. Android (Chrome) : crée un favori de n'importe quelle page, remplace son adresse par le code ci-dessus et nomme-le « Matchmaking LBC » ; sur leboncoin.fr, tape « Matchmaking LBC » dans la barre d'adresse et choisis le favori.</p>
+      <p>Ensuite : clique sur Leboncoin ci-dessus, puis lance le favori sur l'onglet Leboncoin.</p></details>
     <div id="pr" aria-live="polite"></div>
   </section>
 </main>
@@ -708,9 +717,18 @@ function panierHtml(p) {
   return `<div class="chips">${jeux}</div>${vendeurs}${err}`;
 }
 
+const jeuxSaisis = () => $('#pj').value.split(/[\n,;|]+/).map(x => x.trim()).filter(Boolean);
+// Matchmaking Leboncoin : le favori lbc.js lit la liste dans le hash de l'onglet ouvert ici.
+const lbcUrl = jeux => 'https://www.leboncoin.fr/recherche?category=41#nj=' + encodeURIComponent(jeux.slice(0, 50).join('|'));
+$('#plbc').addEventListener('click', () => {
+  const jeux = jeuxSaisis();
+  if (jeux.length < 2) { $('#pr').innerHTML = '<p class="na">Mets au moins 2 jeux (un par ligne).</p>'; return; }
+  window.open(lbcUrl(jeux), '_blank', 'noopener');
+});
+
 $('#pf').addEventListener('submit', async e => {
   e.preventDefault();
-  const jeux = $('#pj').value.split(/[\n,;|]+/).map(x => x.trim()).filter(Boolean);
+  const jeux = jeuxSaisis();
   if (jeux.length < 2) { $('#pr').innerHTML = '<p class="na">Mets au moins 2 jeux (un par ligne).</p>'; return; }
   // Au-delà de 15 jeux, le workflow espace ses requêtes Okkazeo (anti-bannissement) : ~1,2 s par jeu jamais cherché dans l'heure.
   const n = Math.min(jeux.length, 50), debut = Date.now();
