@@ -53,13 +53,18 @@
   async function cherche(jeu) {
     const cle = 'nj-lbc2:j:' + normalize(jeu), c = lire(cle);
     if (c && Date.now() - c.t < 3600000) return c;
+    // La recherche Leboncoin ne tolère pas les fautes (« dice thrones » : 3 résultats, « dice throne » : 260) :
+    // sans aucune annonce retenue, on relance au singulier (variantesRecherche, lib/match.js).
     const annonces = [], lots = [];
-    for (let p = 1; p <= 3; p++) {
-      const sd = parseNextData(await page(lbcUrlRecherche(jeu, p)));
-      if (!sd) throw CAPTCHA;
-      annonces.push(...annoncesLbc(sd, jeu));
-      lots.push(...lotsCandidats(sd, jeu));
-      if (!(sd.total > 35 * p)) break;
+    for (const v of variantesRecherche(jeu)) {
+      for (let p = 1; p <= 3; p++) {
+        const sd = parseNextData(await page(lbcUrlRecherche(v, p)));
+        if (!sd) throw CAPTCHA;
+        annonces.push(...annoncesLbc(sd, jeu));
+        lots.push(...lotsCandidats(sd, jeu));
+        if (!(sd.total > 35 * p)) break;
+      }
+      if (annonces.length) break;
     }
     const res = { t: Date.now(), annonces, lots };
     ecrire(cle, res);

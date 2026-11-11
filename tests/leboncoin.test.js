@@ -132,3 +132,8 @@ test('annonceCorrespond : une lettre d’écart tolérée (5 lettres et plus), m
   ko('Scout', 'Sergent scout'); ko('Scout', 'Insert 3D pour le jeu Scout'); ko('Scout', 'Scout Space Wolves metal');
   ko('dice thrones', 'Dice thrones Aventures'); ko('Splendor', 'Splendor marvel'); ko('Azul', 'Azul Duel');
 });
+test('panneau : jeux à 0 annonce en fin de recherche → rappel de vérifier l’orthographe ; rien pendant la recherche', () => {
+  const fin = panneauHtml({ fait: 2, total: 2, jeux: [{ demande: 'minirogue', annonces: 0 }, { demande: 'Azul', annonces: 3 }], vendeurs: [] });
+  assert.ok(fin.includes('vérifie l’orthographe'));
+  assert.ok(!panneauHtml({ fait: 1, total: 2, jeux: [{ demande: 'minirogue', annonces: 0 }], vendeurs: [] }).includes('orthographe'));
+});
