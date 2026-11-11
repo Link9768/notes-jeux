@@ -24,6 +24,7 @@
     .vend{border-top:1px solid #2c2c32;padding:8px 0}.top{display:flex;flex-wrap:wrap;gap:4px 8px;align-items:baseline}
     .right{margin-left:auto}.tag{background:#2c2c32;border-radius:8px;padding:0 6px;font-size:11px}.ok{background:#1f4a2a}
     .ann{display:flex;justify-content:space-between;gap:8px;padding:2px 0}a{color:#ec5a13}
+    h3{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:#8b8b96;margin:12px 0 0}
   </style><div class="box"><header><b>Matchmaking Leboncoin</b><button id="x" title="Fermer">✕</button></header><div id="c"></div></div>`;
   racine.getElementById('x').addEventListener('click', () => { hote.style.display = 'none'; });
   document.documentElement.appendChild(hote);
@@ -37,23 +38,37 @@
     document.body.appendChild(s);
   });
 
-  // Une recherche (page 2 seulement si > 35 résultats) ; CAPTCHA si DataDome nous barre la route.
+  // Une page Leboncoin (recherche ou annonce), espacée des autres ; CAPTCHA si DataDome nous barre la route.
   let nReq = 0;
+  async function page(url) {
+    if (nReq++) await sleep(1000 + Math.random() * 500);
+    const r = await fetch(url, { credentials: 'include' });
+    if (r.status === 403 || r.redirected) throw CAPTCHA;
+    return r.text();
+  }
+  // Une recherche, toute la France : 3 pages au plus (105 annonces, les plus récentes) ; annonces + lots candidats.
   async function cherche(jeu) {
-    const cle = 'nj-lbc:j:' + normalize(jeu), c = lire(cle);
-    if (c && Date.now() - c.t < 3600000) return c.annonces;
-    const annonces = [];
-    for (let page = 1; page <= 2; page++) {
-      if (nReq++) await sleep(1000 + Math.random() * 500);
-      const r = await fetch(lbcUrlRecherche(jeu, page), { credentials: 'include' });
-      if (r.status === 403 || r.redirected) throw CAPTCHA;
-      const sd = parseNextData(await r.text());
+    const cle = 'nj-lbc2:j:' + normalize(jeu), c = lire(cle);
+    if (c && Date.now() - c.t < 3600000) return c;
+    const annonces = [], lots = [];
+    for (let p = 1; p <= 3; p++) {
+      const sd = parseNextData(await page(lbcUrlRecherche(jeu, p)));
       if (!sd) throw CAPTCHA;
       annonces.push(...annoncesLbc(sd, jeu));
-      if (!(sd.total > 35)) break;
+      lots.push(...lotsCandidats(sd, jeu));
+      if (!(sd.total > 35 * p)) break;
     }
-    ecrire(cle, { t: Date.now(), annonces });
-    return annonces;
+    const res = { t: Date.now(), annonces, lots };
+    ecrire(cle, res);
+    return res;
+  }
+  // Lot candidat pour ≥ 2 jeux : description lue (page de l'annonce, gardée 1 h) pour confirmer les jeux de la liste qu'elle cite.
+  async function confirmeLot(lot, liste) {
+    const cle = 'nj-lbc2:a:' + lot.id, c = lire(cle);
+    const body = c && Date.now() - c.t < 3600000 ? c.body : parseAnnonceBody(await page(lot.url));
+    if (body == null) throw CAPTCHA;
+    if (!c) ecrire(cle, { t: Date.now(), body });
+    return jeuxDansTexte(lot.titre + ' ' + body, liste);
   }
 
   (async () => {
@@ -69,21 +84,36 @@
     ecrire('nj-lbc:liste', liste.join('|'));
     if (liste.length < 2) { message('Mets au moins 2 jeux.'); return; }
 
-    const jeux = [];
+    const jeux = [], candidats = new Map(); // id d'annonce → { lot, demandes: Set }
+    let lots = [];
     const maj = msg => dessine(panneauHtml({
       fait: jeux.length, total: liste.length,
       jeux: jeux.map(j => ({ demande: j.demande, annonces: j.annonces && j.annonces.length })),
       vendeurs: matchVendeurs(jeux.filter(j => j.annonces).map(j => ({ titre: j.demande, annonces: j.annonces })), CP_PARIS),
-      message: msg,
+      lots, message: msg,
     }));
+    const captcha = () => maj('Leboncoin demande un captcha : recharge la page, résous-le puis relance le favori (les jeux déjà vus sont gardés 1 h).');
     maj();
     for (const demande of liste) {
-      try { jeux.push({ demande, annonces: await cherche(demande) }); }
-      catch (e) {
-        if (e === CAPTCHA) { maj('Leboncoin demande un captcha : recharge la page, résous-le puis relance le favori.'); return; }
+      try {
+        const r = await cherche(demande);
+        jeux.push({ demande, annonces: r.annonces });
+        for (const l of r.lots) { const c = candidats.get(l.id) || { lot: l, demandes: new Set() }; c.demandes.add(demande); candidats.set(l.id, c); }
+      } catch (e) {
+        if (e === CAPTCHA) return captcha();
         jeux.push({ demande, annonces: null });
       }
       maj();
     }
+    // Lots : ceux que Leboncoin a remontés pour au moins 2 jeux de la liste, les plus prometteurs d'abord, 20 lus au plus.
+    const aLire = [...candidats.values()].filter(c => c.demandes.size >= 2).sort((a, b) => b.demandes.size - a.demandes.size).slice(0, 20);
+    for (const [i, c] of aLire.entries()) {
+      maj(`Lecture des lots : ${i + 1}/${aLire.length}…`);
+      try {
+        const trouves = await confirmeLot(c.lot, liste);
+        if (trouves.length >= 2) lots = [...lots, { ...c.lot, jeux: trouves, procheParis: CP_PARIS.includes(c.lot.cp) }].sort((a, b) => b.jeux.length - a.jeux.length);
+      } catch (e) { if (e === CAPTCHA) return captcha(); }
+    }
+    maj();
   })();
 })();

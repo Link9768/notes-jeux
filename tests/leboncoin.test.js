@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
-const { lbcUrlRecherche, parseNextData, annonceCorrespond, annoncesLbc, listeDepuisHash, panneauHtml } = require('../lib/leboncoin.js');
+const { lbcUrlRecherche, parseNextData, annonceCorrespond, annoncesLbc, listeDepuisHash, panneauHtml, lotsCandidats, parseAnnonceBody, jeuxDansTexte } = require('../lib/leboncoin.js');
 const { matchVendeurs } = require('../lib/panier.js');
 const fx = n => fs.readFileSync(`${__dirname}/fixtures/${n}`, 'utf8');
 const CPS = JSON.parse(fx('../../lib/cp-paris-10km.json')).cps;
@@ -53,9 +53,9 @@ test('fixture clank : ni Ratchet ni lot parmi les annonces retenues', () => {
   assert.ok(r.every(a => !/ratchet|\blots?\b/i.test(a.etat)), r.map(a => a.etat).join('\n'));
 });
 
-test('lbcUrlRecherche : catégorie 41, zone Paris 13e, accents encodés, page 2', () => {
-  assert.equal(lbcUrlRecherche('Azul'), 'https://www.leboncoin.fr/recherche?category=41&text=Azul&locations=Paris__48.82659_2.36366_10000_10000');
-  assert.ok(lbcUrlRecherche('Château Combo').includes('text=Ch%C3%A2teau%20Combo&'));
+test('lbcUrlRecherche : catégorie 41, toute la France (pas de zone), accents encodés, page 2', () => {
+  assert.equal(lbcUrlRecherche('Azul'), 'https://www.leboncoin.fr/recherche?category=41&text=Azul');
+  assert.ok(lbcUrlRecherche('Château Combo').endsWith('text=Ch%C3%A2teau%20Combo'));
   assert.ok(lbcUrlRecherche('Azul', 2).endsWith('&page=2'));
   assert.ok(!lbcUrlRecherche('Azul', 1).includes('page='));
 });
@@ -95,4 +95,29 @@ test('lbc.js : compile ; hors leboncoin.fr → alerte, aucun fetch', () => {
   const calls = { alert: 0, fetch: 0 };
   vm.runInNewContext(src, { location: { hostname: 'example.com', hash: '' }, alert: () => calls.alert++, fetch: async () => { calls.fetch++; } });
   assert.deepEqual(calls, { alert: 1, fetch: 0 });
+});
+
+const LOT = fs.readFileSync(`${__dirname}/fixtures/lbc-annonce-lot.html`, 'utf8');
+test('lots : description lue sur la page de l’annonce (vraie annonce du 2026-11-12) ; page sans annonce → null', () => {
+  const b = parseAnnonceBody(LOT);
+  assert.ok(b.length > 1000 && /just one/i.test(b));
+  assert.equal(parseAnnonceBody('<html></html>'), null);
+});
+test('lots : jeux de la liste trouvés dans la description (expression entière, accents et casse ignorés)', () => {
+  const b = parseAnnonceBody(LOT);
+  assert.deepEqual(jeuxDansTexte(b, ['Just One', 'Abyss', '7 Wonders Duel', 'Galerapagos', 'Scout', 'Azul']), ['Just One', 'Abyss', '7 Wonders Duel', 'Galerapagos']);
+  assert.deepEqual(jeuxDansTexte('Lot : just dance, one piece, Azul', ['Just One', 'Azul']), ['Azul']); // « just » et « one » séparés ≠ Just One
+});
+test('lots : candidats = annonces de la recherche dont le titre ne nomme pas le jeu (le jeu est dans la description), jeux vidéo exclus', () => {
+  const sd = { ads: [
+    { list_id: 1, subject: 'Jeux de société modernes', price: [5], url: 'https://www.leboncoin.fr/ad/jeux_jouets/1', location: { city: 'Lyon', zipcode: '69001' }, owner: { name: 'a', user_id: 'u1' } },
+    { list_id: 2, subject: 'Just One', price: [10], url: 'u2', location: {}, owner: {} },
+    { list_id: 3, subject: 'Jeu PS4 lot', price: [10], url: 'u3', location: {}, owner: {} },
+    { list_id: 4, subject: 'Sans prix', url: 'u4', location: {}, owner: {} } ] };
+  assert.deepEqual(JSON.parse(JSON.stringify(lotsCandidats(sd, 'Just One'))), [{ id: '1', titre: 'Jeux de société modernes', url: 'https://www.leboncoin.fr/ad/jeux_jouets/1', prix: 5, ville: 'Lyon', cp: '69001', vendeur: 'a' }]);
+});
+test('panneau : encart « Lots qui contiennent plusieurs de tes jeux », trié, échappé', () => {
+  const h = panneauHtml({ fait: 2, total: 2, jeux: [], vendeurs: [], lots: [{ titre: 'Lot <b>', url: 'https://www.leboncoin.fr/ad/jeux_jouets/1', prix: 120, ville: 'Paris', cp: '75015', procheParis: true, jeux: ['Just One', 'TTMC'] }] });
+  assert.ok(h.includes('Lots qui contiennent plusieurs de tes jeux') && h.includes('Just One, TTMC') && h.includes('2 jeux') && h.includes('120 €') && h.includes('près de Paris') && h.includes('Lot &lt;b&gt;'), h);
+  assert.ok(!panneauHtml({ fait: 1, total: 2, jeux: [], vendeurs: [], lots: [] }).includes('Lots qui'));
 });

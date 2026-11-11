@@ -106,6 +106,12 @@ Plusieurs jeux dans la barre (« Abyss, Clank, Azul », virgule ou point-virgule
 - **Fichiers** : `lbc.js` (racine, navigateur), `lib/leboncoin.js` (logique testée), `tests/leboncoin.test.js`. Fixtures `tests/fixtures/lbc-search-{azul,clank}.html` allégées, pseudos et `user_id` anonymisés (non versionnées comme les autres `*.html`).
 - **À vérifier en vrai navigateur** : CSP de leboncoin.fr (seul `frame-ancestors` relevé : l'injection d'un script externe devrait passer), hash `#nj=` conservé après l'arrivée sur la page, favori sur Android (Chrome, saisie du nom dans la barre d'adresse).
 
+## Leboncoin : toute la France et lots (2026-11-12)
+
+- Recherche **sans zone** (toute la France), 3 pages max par jeu (105 annonces les plus récentes) ; badge « près de Paris » via `cp-paris-10km.json`. Cache sessionStorage préfixe `nj-lbc2:` (1 h).
+- **Lots** : la description n'est **pas** dans les résultats de recherche (`body` vide, vérifié), mais Leboncoin y cherche quand même. Candidat = annonce de la recherche dont le titre ne nomme pas le jeu (`lotsCandidats`). Un candidat remonté pour ≥ 2 jeux de la liste est lu sur sa page `/ad/…` (`parseAnnonceBody` : `props.pageProps.ad.body`, vérifié : 1 446 car. pour un lot de ~40 jeux) ; `jeuxDansTexte` (nom entier, mots consécutifs) confirme les jeux ; 20 lots lus max ; encart « Lots qui contiennent plusieurs de tes jeux ». Fixture : `tests/fixtures/lbc-annonce-lot.html`.
+- **Okkazeo** : le matchmaking (workflow Panier) est déjà **toute la France** (vendeurs près de Paris classés d'abord) ; seul l'encart Okkazeo de la fiche d'un jeu liste les annonces ≤ 10 km (avec le total France).
+
 ## Sécurité
 
 Les webhooks sont publics. La recherche déclenche environ 8 requêtes vers des sites tiers par appel (2 par boutique + 2 BGG) : acceptable pour un usage perso. Si besoin, ajouter une clé simple dans l'URL et la vérifier dans un node du workflow.
