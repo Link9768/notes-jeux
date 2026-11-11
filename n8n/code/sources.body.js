@@ -127,17 +127,19 @@ async function recsBgg() {
   return pickBggRecs(typeof r.body === 'string' ? JSON.parse(r.body) : r.body, bgg.titre);
 }
 
-// Version duo du jeu (voir pickDuo) : fiche geekitems du jeu, puis de ses jeux liés (6 au plus, en parallèle).
-// Facultative : panne → null, sans erreur affichée. En parallèle de MyLudo (plus lent) : ne rallonge pas la recherche.
-async function duoBgg() {
+// Fiche geekitems du jeu → version duo (pickDuo : fiches des jeux liés, 6 au plus, en parallèle) et rejouabilité
+// (pickRejouabilite, + stats dynamicinfo). Facultatif : panne → null, sans erreur affichée. En parallèle de MyLudo (plus lent).
+async function ficheBgg() {
   if (!idBgg) return null;
-  const item = async x => {
-    const r = await getFull(`https://api.geekdo.com/api/geekitems?objectid=${x}&objecttype=thing&nosession=1`, { ...UA, 'Accept': 'application/json' });
-    if (r.statusCode >= 400) throw new Error(`HTTP ${r.statusCode} geekitems`);
-    return (typeof r.body === 'string' ? JSON.parse(r.body) : r.body).item;
+  const geekdo = async url => {
+    const r = await getFull(url, { ...UA, 'Accept': 'application/json' });
+    if (r.statusCode >= 400) throw new Error(`HTTP ${r.statusCode} geekdo`);
+    return typeof r.body === 'string' ? JSON.parse(r.body) : r.body;
   };
-  const base = await item(idBgg);
-  return pickDuo(base, await Promise.all(duoCandidats(base).ids.map(x => item(x).catch(() => null))));
+  const item = async x => (await geekdo(`https://api.geekdo.com/api/geekitems?objectid=${x}&objecttype=thing&nosession=1`)).item;
+  const [base, dyn] = await Promise.all([item(idBgg), geekdo(`https://api.geekdo.com/api/dynamicinfo?objectid=${idBgg}&objecttype=thing`).catch(() => null)]);
+  const duo = pickDuo(base, await Promise.all(duoCandidats(base).ids.map(x => item(x).catch(() => null))));
+  return { duo, rejouabilite: pickRejouabilite(base, dyn && dyn.item && dyn.item.stats) };
 }
 
 const [ej, ph, ok, ml, sim, du] = await Promise.allSettled([
@@ -146,10 +148,10 @@ const [ej, ph, ok, ml, sim, du] = await Promise.allSettled([
   okkazeo(),
   myludo(),
   recsBgg(),
-  duoBgg(),
+  ficheBgg(),
 ]);
 const val = r => (r.status === 'fulfilled' ? r.value : null);
 // Lien direct vers la page BoardGameGeek, lu dans la fiche Okkazeo (null si inconnu : la page propose alors la recherche BGG).
 const bggUrl = (val(ok) || {}).bggUrl || null;
 const erreurs = [ej, ph, ok, ml, sim].map((r, i) => r.status === 'rejected' ? `${['espritjeu', 'philibert', 'okkazeo', 'myludo', 'bgg-recs'][i]}: ${(r.reason && r.reason.message) || String(r.reason)}` : null).filter(Boolean);
-return [{ json: { query: q, espritjeu: val(ej), philibert: val(ph), bgg, okkazeo: val(ok), myludo: val(ml), similaires: val(sim), duo: val(du), bggUrl, liens, erreurs } }];
+return [{ json: { query: q, espritjeu: val(ej), philibert: val(ph), bgg, okkazeo: val(ok), myludo: val(ml), similaires: val(sim), duo: (val(du) || {}).duo || null, rejouabilite: (val(du) || {}).rejouabilite || null, bggUrl, liens, erreurs } }];

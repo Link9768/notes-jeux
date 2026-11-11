@@ -133,3 +133,9 @@ API interne non officielle, 3 requêtes de base (accueil → jeton CSRF + cookie
 - Mécaniques en **français** (MyLudo) : pas les libellés BGG (« Push Your Luck »).
 - Limites vues en production : MyLudo liste des jeux datés dans le futur (2027) ; `rating.game` peut être vide pour un jeu récent (Drillers). Recommandations BGG d'un jeu très récent (Drillers) : jeux obscurs, peu de joueurs en ont écrit.
 - Fixtures : `tests/fixtures/myludo-info-*.json` et `myludo-tags-clank.json` (listes allégées à id/code/title/edition/type).
+
+## Rejouabilité et difficulté MyLudo (2026-11-11)
+
+- **Aucun site ne note la rejouabilité** par jeu (BGG, MyLudo, boutiques, sites FR : recherché). Indicateur maison = **parties enregistrées sur BGG par propriétaire** (`api.geekdo.com/api/dynamicinfo?objectid=<id>&objecttype=thing` → `item.stats.numplays / numowned`, sans token), dans `pickRejouabilite` (`lib/bgg.js`), node Sources (`ficheBgg`, même fiche geekitems que le Duo, en parallèle de MyLudo). Seuils calibrés sur 32 jeux : ≥ 4,5 forte (Azul 4,9, The Crew 6,9), ≥ 3 bonne (7 Wonders Duel 3,6, Clank 3,0), ≥ 2 moyenne (Moustache 2,1), sinon faible (Detective 1,0). Famille « Escape Room Games » → usage unique (Exit 0,6) ; mécanique « Legacy Game » → « campagne à jouer une fois ». Biais connus : jeu d'avant 2008 sous-noté (Catan 1,8, affiché « jeu ancien ») ; < 1 000 propriétaires → « peu de données ». Affiché `🔁` dans les infos de l'encart BGG.
+- **Difficulté MyLudo** : `myludo.complexite` (`rating.complexity.note`, sur 5) affichée `⚖ x/5` dans la tuile MyLudo ; 0 = inconnue → null (vu sur Exit). `myludo.js` est aussi dans le node Outils : le redéployer avec Sources.
+- MyLudo était en panne (503, timeouts) le 2026-11-11 : tuile « indisponible », le reste servi.

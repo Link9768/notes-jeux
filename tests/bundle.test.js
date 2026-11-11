@@ -308,9 +308,14 @@ test('sources : version duo intégrable (Res Arcana → Res Arcana Duo) ; geekit
   const gi = id => `https://api.geekdo.com/api/geekitems?objectid=${id}&objecttype=thing&nosession=1`;
   const nodes = { Webhook: { query: { q: 'clank' } }, 'BGG Fiche': { bgg: { note: 7.6, titre: 'Res Arcana', url: 'https://boardgamegeek.com/boardgame/262712' } } };
   const over = Object.fromEntries(Object.keys(DUO).map(id => [gi(id), { statusCode: 200, body: DUO[id] }]));
+  // Stats réelles de Res Arcana relevées le 2026-11-11 (dynamicinfo).
+  over['https://api.geekdo.com/api/dynamicinfo?objectid=262712&objecttype=thing'] = { statusCode: 200, body: JSON.stringify({ item: { stats: { numplays: '168060', numowned: '35687' } } }) };
   const { out } = await run('sources', { nodes, http: serve(over) });
   assert.deepEqual(out.duo, { titre: 'Res Arcana Duo', url: 'https://boardgamegeek.com/boardgame/427345/res-arcana-duo', integrable: true });
+  assert.equal(out.rejouabilite.parties, 4.7);
+  assert.equal(out.rejouabilite.niveau, 'forte');
   const panne = await run('sources', { nodes, http: serve() });
   assert.equal(panne.out.duo, null);
+  assert.equal(panne.out.rejouabilite, null);
   assert.ok(!panne.out.erreurs.some(e => /duo|geekitems/.test(e)), JSON.stringify(panne.out.erreurs));
 });

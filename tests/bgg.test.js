@@ -131,3 +131,20 @@ test('duo : jeu déjà à 2 joueurs, aucun candidat duo, fiches absentes → nul
   const sansInteg = { ...ws, links: { ...ws.links, boardgameintegration: [], reimplementation: [{ objectid: '366161' }] } };
   assert.equal(pickDuo(sansInteg, [DUO[366161].item]).integrable, false);
 });
+
+test('pickRejouabilite : parties par propriétaire, escape game, Legacy, jeu ancien', () => {
+  const { pickRejouabilite } = require('../lib/bgg.js');
+  const fiche = (liens = {}, yearpublished = '2018') => ({ yearpublished, links: liens });
+  // Chiffres réels relevés le 2026-11-11 (dynamicinfo).
+  assert.deepEqual(pickRejouabilite(fiche(), { numplays: '945257', numowned: '191106' }), { niveau: 'forte', parties: 4.9, type: null, proprietaires: 191106, ancien: false });
+  assert.equal(pickRejouabilite(fiche(), { numplays: '682529', numowned: '188862' }).niveau, 'bonne'); // 7 Wonders Duel
+  assert.equal(pickRejouabilite(fiche(), { numplays: '187549', numowned: '63325' }).niveau, 'bonne'); // Clank 3,0
+  assert.equal(pickRejouabilite(fiche(), { numplays: '2508', numowned: '1197' }).niveau, 'moyenne'); // Moustache 2,1
+  assert.equal(pickRejouabilite(fiche(), { numplays: '24512', numowned: '24782' }).niveau, 'faible'); // Detective
+  const exit = pickRejouabilite(fiche({ boardgamefamily: [{ name: 'Category: Escape Room Games' }] }), { numplays: '7445', numowned: '12888' });
+  assert.equal(exit.type, 'escape');
+  assert.equal(exit.niveau, 'unique');
+  assert.equal(pickRejouabilite(fiche({ boardgamemechanic: [{ name: 'Legacy Game' }] }), { numplays: '313042', numowned: '90312' }).type, 'legacy');
+  assert.equal(pickRejouabilite(fiche({}, '1995'), { numplays: '453577', numowned: '246777' }).ancien, true); // Catan
+  assert.equal(pickRejouabilite(fiche(), null), null);
+});

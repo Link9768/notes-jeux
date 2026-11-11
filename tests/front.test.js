@@ -55,7 +55,7 @@ test('grand encart BGG : fiche absente → indisponible + recherche BGG ; style 
 test('grand encart BGG : texte échappé', () => {
   assert.ok(!front.bggCard(bggD({ bgg: { ...bggD().bgg, mecaniques: ['<img src=x onerror=alert(1)>'] } }), null).includes('<img src=x'));
 });
-test('tuile MyLudo minimaliste dans la page : note, notes, titre, sans durée ni complexité', async () => {
+test('tuile MyLudo dans la page : note, notes, titre, difficulté MyLudo, sans durée', async () => {
   const els = {};
   const elx = sel => (els[sel] = els[sel] || { innerHTML: '', value: '', addEventListener() {} });
   const ctx = { document: { querySelector: elx }, location: { search: '' }, history: { replaceState() {} }, URLSearchParams,
@@ -65,7 +65,8 @@ test('tuile MyLudo minimaliste dans la page : note, notes, titre, sans durée ni
   await new Promise(r => setTimeout(r, 10));
   const tuiles = els['#out'].innerHTML.match(/<div class="tiles">[\s\S]*?<\/div><\/div><\/div>/)[0];
   for (const t of ['MyLudo', '8,3', '1500 notes', '« Clank! »']) assert.ok(tuiles.includes(t), t);
-  assert.ok(!tuiles.includes('⏱') && !tuiles.includes('⚖'));
+  assert.ok(!tuiles.includes('⏱'));
+  assert.ok(tuiles.includes('⚖ 2,5/5'));
 });
 test('semblables : bouton 🔍 portant le titre (échappé) pour relancer la recherche', () => {
   const h = front.semblables({ similaires: [{ titre: "L'Île \"X\"", annee: 2019, url: 'u', note: 8 }] });
@@ -374,4 +375,14 @@ test('lien Leboncoin : catégorie jeux, liste dans le hash, 50 jeux au plus ; fa
   assert.equal(decodeURIComponent(front.lbcUrl(Array.from({ length: 51 }, (_, i) => 'j' + i)).split('#nj=')[1]).split('|').length, 50);
   assert.ok(/href="javascript:[^"]*link9768\.github\.io\/notes-jeux\/lbc\.js/.test(html));
   assert.ok(html.includes('id="plbc"'));
+});
+
+test('rejouabilité dans l\'encart BGG : niveau, parties par propriétaire, cas escape game et jeu ancien', () => {
+  const el = () => ({ innerHTML: '', value: '', addEventListener() {} });
+  const f = vm.runInNewContext(`${script}; ({ rejouHtml })`, { document: { querySelector: el }, location: { search: '' }, history: {}, fetch: async () => { throw new Error('x'); }, URLSearchParams });
+  assert.ok(f.rejouHtml({ niveau: 'forte', parties: 4.9, type: null, proprietaires: 191106, ancien: false }).includes('🔁 Rejouabilité forte · 4,9 parties/propriétaire'));
+  assert.ok(f.rejouHtml({ niveau: 'unique', parties: 0.6, type: 'escape', proprietaires: 12888 }).includes('Usage unique (escape game)'));
+  assert.ok(f.rejouHtml({ niveau: 'faible', parties: 1.8, type: null, proprietaires: 246777, ancien: true }).includes('jeu ancien'));
+  assert.ok(f.rejouHtml({ niveau: 'moyenne', parties: 2.8, type: null, proprietaires: 504 }).includes('peu de données'));
+  assert.equal(f.rejouHtml(null), '');
 });

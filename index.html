@@ -240,6 +240,15 @@ function retour() {
   return p ? `<button type="button" class="back">← Retour à ${esc((p.myludo && p.myludo.titre) || p.query)}</button>` : '';
 }
 
+// Rejouabilité (pickRejouabilite, lib/bgg.js) : parties enregistrées sur BGG par propriétaire ; escape game et Legacy repérés.
+function rejouHtml(r) {
+  if (!r || (!r.niveau && !r.type)) return '';
+  const txt = r.type === 'escape' ? 'Usage unique (escape game)' : r.type === 'legacy' ? 'Legacy : campagne à jouer une fois' : `Rejouabilité ${r.niveau}`;
+  const detail = r.parties != null ? ` · ${fr(r.parties)} parties/propriétaire` : '';
+  const note = r.ancien ? ' (jeu ancien : sous-estimée)' : r.proprietaires < 1000 ? ' (peu de données)' : '';
+  return `<span title="Parties enregistrées sur BGG par propriétaire du jeu (repères : Exit 0,6 · Clank 3 · Azul 5 · The Crew 7)">🔁 ${esc(txt)}${detail}${note}</span>`;
+}
+
 // Grand encart BoardGameGeek : note, infos pratiques, style de jeu (mécaniques et catégories BGG traduites en français).
 function bggCard(d, games) {
   const b = d.bgg, pied = `<footer>${liens(d, games)}</footer>`;
@@ -249,7 +258,7 @@ function bggCard(d, games) {
   const note = b.note == null ? `<span class="na">pas encore d'avis</span>${extB}` : `<span class="big">${fr(b.note)}<small>/10</small></span> <span class="mut">${b.votes} votes</span>${extB}`;
   const rang = b.rang ? `🏆 #${b.rang}${b.rangCat ? ` · #${b.rangCat.rang} ${esc(b.rangCat.nom)}` : ''}` : '';
   const joueurs = b.joueurs && `👥 ${esc(b.joueurs)}${b.ideal ? ` · idéal à ${esc(b.ideal)}` : ''}`;
-  const facts = [rang, b.duree && `⏱ ${esc(b.duree)} min`, joueurs, b.poids != null && `⚖ ${fr(b.poids)}/5`].filter(Boolean).map(f => `<span>${f}</span>`).join('');
+  const facts = [rang, b.duree && `⏱ ${esc(b.duree)} min`, joueurs, b.poids != null && `⚖ ${fr(b.poids)}/5`, rejouHtml(d.rejouabilite)].filter(Boolean).map(f => `<span>${f}</span>`).join('');
   const meca = b.mecaniques || [], th = b.themes || [];
   // Mécanique cliquable : déplie les 20 meilleurs jeux BGG de cette mécanique.
   const style = meca.length || th.length
@@ -339,8 +348,8 @@ function render(d, games) {
   const head = m
     ? `<div class="head">${m.image ? `<img src="${esc(m.image)}" alt="">` : ''}<div><h1>${esc(m.titre)}</h1><div class="mut">${[m.annee, m.joueurs && m.joueurs + ' joueurs', m.age].filter(Boolean).map(esc).join(' · ')}${bgaBadge(d, games)}${duoBadge(d)}</div>${listesMenu(d)}</div></div>`
     : `<div class="head"><div><h1>${esc(d.query)}</h1><div class="mut">${bgaBadge(d, games)}${duoBadge(d)}</div>${listesMenu(d)}</div></div>`;
-  // Tuile MyLudo minimaliste, comme les boutiques : note, nombre de notes, titre retenu (durée et poids sont dans l'encart BGG).
-  const tiles = `<div class="tiles">${tile('Esprit Jeu', 'var(--ej)', d.espritjeu, 5, 'avis', L.espritjeu)}${tile('Philibert', 'var(--ph)', d.philibert, 5, 'avis', L.philibert)}${tile('MyLudo', 'var(--ml)', m && { note: m.note, avis: m.avis, titre: m.titre, url: m.url }, 10, 'notes', L.myludo || '#')}</div>`;
+  // Tuile MyLudo minimaliste, comme les boutiques : note, nombre de notes, titre retenu, difficulté MyLudo (⚖ sur 5, en plus de celle de BGG).
+  const tiles = `<div class="tiles">${tile('Esprit Jeu', 'var(--ej)', d.espritjeu, 5, 'avis', L.espritjeu)}${tile('Philibert', 'var(--ph)', d.philibert, 5, 'avis', L.philibert)}${tile('MyLudo', 'var(--ml)', m && { note: m.note, avis: m.avis, titre: m.titre, url: m.url, poids: m.complexite }, 10, 'notes', L.myludo || '#')}</div>`;
   $('#out').innerHTML = `${retour()}${ongletsHtml()}${head}${tiles}${bggCard(d, games)}${semblables(d)}${jumeauxBloc(d)}${auteur(m)}${okk(d.okkazeo, L.okkazeo, prixNeuf(d))}<div id="videos"></div>`;
   majVers();
   // Jumeaux préchargés en arrière-plan (réponse gardée par outil) : le clic sur 🎯 déplie sans attente.
