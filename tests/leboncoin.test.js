@@ -53,9 +53,9 @@ test('fixture clank : ni Ratchet ni lot parmi les annonces retenues', () => {
   assert.ok(r.every(a => !/ratchet|\blots?\b/i.test(a.etat)), r.map(a => a.etat).join('\n'));
 });
 
-test('lbcUrlRecherche : catégorie 41, toute la France (pas de zone), accents encodés, page 2', () => {
-  assert.equal(lbcUrlRecherche('Azul'), 'https://www.leboncoin.fr/recherche?category=41&text=Azul');
-  assert.ok(lbcUrlRecherche('Château Combo').endsWith('text=Ch%C3%A2teau%20Combo'));
+test('lbcUrlRecherche : catégorie 41, type « Jeux de société » (sinon « scout » donne des scooters), toute la France, accents encodés, page 2', () => {
+  assert.equal(lbcUrlRecherche('Azul'), 'https://www.leboncoin.fr/recherche?category=41&text=Azul&toy_type=jeuxdesociete');
+  assert.ok(lbcUrlRecherche('Château Combo').includes('text=Ch%C3%A2teau%20Combo&toy_type=jeuxdesociete'));
   assert.ok(lbcUrlRecherche('Azul', 2).endsWith('&page=2'));
   assert.ok(!lbcUrlRecherche('Azul', 1).includes('page='));
 });
@@ -120,4 +120,15 @@ test('panneau : encart « Lots qui contiennent plusieurs de tes jeux », trié, 
   const h = panneauHtml({ fait: 2, total: 2, jeux: [], vendeurs: [], lots: [{ titre: 'Lot <b>', url: 'https://www.leboncoin.fr/ad/jeux_jouets/1', prix: 120, ville: 'Paris', cp: '75015', procheParis: true, jeux: ['Just One', 'TTMC'] }] });
   assert.ok(h.includes('Lots qui contiennent plusieurs de tes jeux') && h.includes('Just One, TTMC') && h.includes('2 jeux') && h.includes('120 €') && h.includes('près de Paris') && h.includes('Lot &lt;b&gt;'), h);
   assert.ok(!panneauHtml({ fait: 1, total: 2, jeux: [], vendeurs: [], lots: [] }).includes('Lots qui'));
+});
+
+test('annonceCorrespond : une lettre d’écart tolérée (5 lettres et plus), mots collés ou séparés ; titres réels du 2026-11-12', () => {
+  const ok = (j, t) => assert.equal(annonceCorrespond(j, t), true, `${j} / ${t}`);
+  const ko = (j, t) => assert.equal(annonceCorrespond(j, t), false, `${j} / ${t}`);
+  ok('dice thrones', 'Dice Throne'); ok('Dice Throne', 'Jeu dice thrones'); ok('tiny moutains goats', 'Tiny Mountains Goats');
+  ok('minirogue', 'Mini Rogue'); ok('mini rogue', 'Minirogue VF'); ok('Pikomino', 'Pickomino');
+  ok('Scout', 'Jeu de société Oink Games Scout original neuf sous blister règles Français et Anglais et dE et ES');
+  ko('Azul', 'Azur'); // moins de 5 lettres : pas de tolérance
+  ko('Scout', 'Sergent scout'); ko('Scout', 'Insert 3D pour le jeu Scout'); ko('Scout', 'Scout Space Wolves metal');
+  ko('dice thrones', 'Dice thrones Aventures'); ko('Splendor', 'Splendor marvel'); ko('Azul', 'Azul Duel');
 });
