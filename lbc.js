@@ -100,8 +100,10 @@
       vendeurs: matchVendeurs(jeux.filter(j => j.annonces).map(j => ({ titre: j.demande, annonces: j.annonces })), CP_PARIS),
       lots, message: msg,
     }));
+    // Liste longue : même rythme qu'une courte (1 à 1,5 s entre deux requêtes), seule la durée change (~4 s par jeu mesuré).
+    const note = liste.length > 20 ? `${liste.length} jeux : environ ${Math.ceil(liste.length * 4 / 60)} min, laisse l’onglet ouvert.` : undefined;
     const captcha = () => maj('Leboncoin demande un captcha : recharge la page, résous-le puis relance le favori (les jeux déjà vus sont gardés 1 h).');
-    maj();
+    maj(note);
     for (const demande of liste) {
       try {
         const r = await cherche(demande);
@@ -111,7 +113,7 @@
         if (e === CAPTCHA) return captcha();
         jeux.push({ demande, annonces: null });
       }
-      maj();
+      maj(note);
     }
     // Lots : ceux que Leboncoin a remontés pour au moins 2 jeux de la liste, les plus prometteurs d'abord, 20 lus au plus.
     const aLire = [...candidats.values()].filter(c => c.demandes.size >= 2).sort((a, b) => b.demandes.size - a.demandes.size).slice(0, 20);

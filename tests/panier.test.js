@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
-const { parseAnnoncesArticles, matchVendeurs, parseListeJeux } = require('../lib/panier.js');
+const { parseAnnoncesArticles, matchVendeurs, parseListeJeux, rythmePanier } = require('../lib/panier.js');
 const fx = n => fs.readFileSync(`${__dirname}/fixtures/${n}`, 'utf8');
 const CPS = JSON.parse(fx('../../lib/cp-paris-10km.json')).cps;
 
@@ -40,9 +40,9 @@ test('vendeurs : aucun vendeur commun → liste vide ; envoi seulement si toutes
   assert.equal(v[0].envoi, false);
   assert.deepEqual(matchVendeurs([], CPS), []);
 });
-test('liste de jeux : virgules, retours à la ligne ou |, doublons et vides retirés, 50 au plus', () => {
+test('liste de jeux : virgules, retours à la ligne ou |, doublons et vides retirés, 100 au plus', () => {
   assert.deepEqual(parseListeJeux('Clank, Abyss\n\nclank|7 Wonders Duel ; '), ['Clank', 'Abyss', '7 Wonders Duel']);
-  assert.equal(parseListeJeux(Array.from({ length: 60 }, (_, i) => 'j' + i).join(',')).length, 50);
+  assert.equal(parseListeJeux(Array.from({ length: 120 }, (_, i) => 'j' + i).join(',')).length, 100);
   assert.deepEqual(parseListeJeux(undefined), []);
 });
 test('vendeurs : la clé (Leboncoin : user_id) prime sur le pseudo ; sans clé, le pseudo comme avant', () => {
@@ -54,4 +54,9 @@ test('vendeurs : la clé (Leboncoin : user_id) prime sur le pseudo ; sans clé, 
   assert.deepEqual([v.length, v[0].nbJeux, v[0].total], [1, 2, 11]);
   // sans clé : pseudo, casse ignorée
   assert.equal(matchVendeurs([{ titre: 'A', annonces: [ann('Zoe', 5)] }, { titre: 'B', annonces: [ann('zoe', 6)] }], CPS).length, 1);
+});
+
+test('rythme du matchmaking Okkazeo : même débit de 16 à 100 jeux (0,4 s, 2 jeux à la fois), normal jusqu\'à 15', () => {
+  assert.deepEqual(rythmePanier(15), { pauseMs: 0, ouvriers: 3 });
+  for (const n of [16, 50, 51, 100]) assert.deepEqual(rythmePanier(n), { pauseMs: 400, ouvriers: 2 }, String(n));
 });

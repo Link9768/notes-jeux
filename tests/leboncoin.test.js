@@ -60,11 +60,11 @@ test('lbcUrlRecherche : catégorie 41, type « Jeux de société » (sinon « sc
   assert.ok(!lbcUrlRecherche('Azul', 1).includes('page='));
 });
 
-test('listeDepuisHash : #nj= décodé, vide ou mal formé → [], 50 au plus', () => {
+test('listeDepuisHash : #nj= décodé, vide ou mal formé → [], 100 au plus', () => {
   assert.deepEqual(listeDepuisHash('#nj=Azul%7CClank'), ['Azul', 'Clank']);
   assert.deepEqual(listeDepuisHash(''), []);
   assert.deepEqual(listeDepuisHash('#nj=%E0'), []);
-  assert.equal(listeDepuisHash('#nj=' + encodeURIComponent(Array.from({ length: 60 }, (_, i) => 'j' + i).join('|'))).length, 50);
+  assert.equal(listeDepuisHash('#nj=' + encodeURIComponent(Array.from({ length: 120 }, (_, i) => 'j' + i).join('|'))).length, 100);
 });
 
 test('Leboncoin + matchVendeurs : même user_id sur 2 jeux → un vendeur à 2 jeux, proche de Paris selon le CP', () => {

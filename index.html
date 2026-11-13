@@ -136,7 +136,7 @@ button.chip:hover,button.chip.on{background:var(--bgg);color:#fff}
   <div id="out" aria-live="polite"></div>
   <section class="panier">
     <header><b>Matchmaking Okkazeo</b><span>vendeurs qui ont plusieurs jeux de ta liste</span></header>
-    <form id="pf"><textarea id="pj" rows="4" aria-label="Jeux recherchés, un par ligne" placeholder="Un jeu par ligne (2 à 50)&#10;7 Wonders Duel&#10;Carcassonne&#10;Azul"></textarea><div class="bts"><button>Chercher les vendeurs</button><button type="button" id="plbc">Leboncoin</button></div></form>
+    <form id="pf"><textarea id="pj" rows="4" aria-label="Jeux recherchés, un par ligne" placeholder="Un jeu par ligne (2 à 100)&#10;7 Wonders Duel&#10;Carcassonne&#10;Azul"></textarea><div class="bts"><button>Chercher les vendeurs</button><button type="button" id="plbc">Leboncoin</button></div></form>
     <details><summary>Installer le favori Matchmaking LBC</summary>
       <p><a href="javascript:(()=>{const s=document.createElement('script');s.src='https://link9768.github.io/notes-jeux/lbc.js?'+Date.now();document.body.appendChild(s)})()">Matchmaking LBC</a></p>
       <input readonly value="javascript:(()=>{const s=document.createElement('script');s.src='https://link9768.github.io/notes-jeux/lbc.js?'+Date.now();document.body.appendChild(s)})()" aria-label="Code du favori">
@@ -728,7 +728,7 @@ function panierHtml(p) {
 
 const jeuxSaisis = () => $('#pj').value.split(/[\n,;|]+/).map(x => x.trim()).filter(Boolean);
 // Matchmaking Leboncoin : le favori lbc.js lit la liste dans le hash de l'onglet ouvert ici.
-const lbcUrl = jeux => 'https://www.leboncoin.fr/recherche?category=41#nj=' + encodeURIComponent(jeux.slice(0, 50).join('|'));
+const lbcUrl = jeux => 'https://www.leboncoin.fr/recherche?category=41#nj=' + encodeURIComponent(jeux.slice(0, 100).join('|'));
 $('#plbc').addEventListener('click', () => {
   const jeux = jeuxSaisis();
   if (jeux.length < 2) { $('#pr').innerHTML = '<p class="na">Mets au moins 2 jeux (un par ligne).</p>'; return; }
@@ -739,15 +739,23 @@ $('#pf').addEventListener('submit', async e => {
   e.preventDefault();
   const jeux = jeuxSaisis();
   if (jeux.length < 2) { $('#pr').innerHTML = '<p class="na">Mets au moins 2 jeux (un par ligne).</p>'; return; }
-  // Au-delà de 15 jeux, le workflow espace ses requêtes Okkazeo (anti-bannissement) : ~1,2 s par jeu jamais cherché dans l'heure.
-  const n = Math.min(jeux.length, 50), debut = Date.now();
-  const attente = () => { $('#pr').innerHTML = `<p class="mut">Recherche de ${n} jeux sur Okkazeo… ${Math.round((Date.now() - debut) / 1000)} s (jusqu'à ~${Math.ceil(n * (n > 15 ? 1.2 : 0.5))} s ; les jeux déjà cherchés dans l'heure sont instantanés)</p><div class="skel"></div><div class="skel"></div>`; };
+  // Le workflow espace ses requêtes Okkazeo (anti-bannissement, voir rythmePanier) : ~1,2 s par jeu jamais cherché dans l'heure,
+  // quelle que soit la taille de la liste (même débit à 100 jeux, durée doublée). Au-delà de 50, deux appels (les 50 premiers, puis les 100) pour que
+  // chaque appel reste court ; le 2e retrouve les 50 premiers dans la mémoire d'1 h du workflow et n'en recherche que la suite.
+  const n = Math.min(jeux.length, 100), liste = jeux.slice(0, n), debut = Date.now();
+  let etape = n > 50 ? 'étape 1/2 : ' : '';
+  const estime = Math.ceil(n * (n > 15 ? 1.2 : 0.5));
+  const attente = () => { $('#pr').innerHTML = `<p class="mut">${etape}Recherche de ${n} jeux sur Okkazeo… ${Math.round((Date.now() - debut) / 1000)} s (jusqu'à ~${estime > 90 ? Math.ceil(estime / 60) + ' min' : estime + ' s'} ; les jeux déjà cherchés dans l'heure sont instantanés)</p><div class="skel"></div><div class="skel"></div>`; };
   attente();
   const minuteur = setInterval(attente, 1000);
-  try {
-    const r = await fetch(API_PANIER + '?jeux=' + encodeURIComponent(jeux.join('|')));
+  const appel = async l => {
+    const r = await fetch(API_PANIER + '?jeux=' + encodeURIComponent(l.join('|')));
     if (!r.ok) throw new Error('HTTP ' + r.status);
-    $('#pr').innerHTML = panierHtml(await r.json());
+    return r.json();
+  };
+  try {
+    if (n > 50) { await appel(liste.slice(0, 50)); etape = 'étape 2/2 : '; }
+    $('#pr').innerHTML = panierHtml(await appel(liste));
   } catch (err) {
     $('#pr').innerHTML = `<p class="na">Recherche impossible (${esc(err.message)}). Réessaie dans un instant.</p>`;
   } finally { clearInterval(minuteur); }

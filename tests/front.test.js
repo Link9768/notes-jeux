@@ -369,10 +369,10 @@ test('vidéos des règles : cherchées à l’affichage (titre MyLudo puis BGG),
   assert.ok(els['#videos'].innerHTML.includes('target="_blank" rel="noopener"')); // vidéo = nouvel onglet
   assert.equal(f.videosHtml({ ludochrono: null, chalet: null }), '');
 });
-test('lien Leboncoin : catégorie jeux, liste dans le hash, 50 jeux au plus ; favori et bouton présents', () => {
+test('lien Leboncoin : catégorie jeux, liste dans le hash, 100 jeux au plus ; favori et bouton présents', () => {
   const u = front.lbcUrl(['Azul', 'Clank']);
   assert.ok(u.startsWith('https://www.leboncoin.fr/recherche?category=41') && u.endsWith('#nj=Azul%7CClank'), u);
-  assert.equal(decodeURIComponent(front.lbcUrl(Array.from({ length: 51 }, (_, i) => 'j' + i)).split('#nj=')[1]).split('|').length, 50);
+  assert.equal(decodeURIComponent(front.lbcUrl(Array.from({ length: 101 }, (_, i) => 'j' + i)).split('#nj=')[1]).split('|').length, 100);
   assert.ok(/href="javascript:[^"]*link9768\.github\.io\/notes-jeux\/lbc\.js/.test(html));
   assert.ok(html.includes('id="plbc"'));
 });
