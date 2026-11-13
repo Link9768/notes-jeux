@@ -51,7 +51,7 @@
   }
   // Une recherche, toute la France : 3 pages au plus (105 annonces, les plus récentes) ; annonces + lots candidats.
   async function cherche(jeu) {
-    const cle = 'nj-lbc2:j:' + normalize(jeu), c = lire(cle);
+    const cle = 'nj-lbc3:j:' + normalize(jeu), c = lire(cle);
     if (c && Date.now() - c.t < 3600000) return c;
     // La recherche Leboncoin ne tolère pas les fautes (« dice thrones » : 3 résultats, « dice throne » : 260) :
     // sans aucune annonce retenue, on relance au singulier (variantesRecherche, lib/match.js).
@@ -72,7 +72,7 @@
   }
   // Lot candidat pour ≥ 2 jeux : description lue (page de l'annonce, gardée 1 h) pour confirmer les jeux de la liste qu'elle cite.
   async function confirmeLot(lot, liste) {
-    const cle = 'nj-lbc2:a:' + lot.id, c = lire(cle);
+    const cle = 'nj-lbc3:a:' + lot.id, c = lire(cle);
     const body = c && Date.now() - c.t < 3600000 ? c.body : parseAnnonceBody(await page(lot.url));
     if (body == null) throw CAPTCHA;
     if (!c) ecrire(cle, { t: Date.now(), body });

@@ -146,3 +146,13 @@ test('lots : un jeu de la liste ne compte que si l’élément de la description
   assert.deepEqual(jeuxDansTexte('- Munchkin Apocalypse 15€ - Tireless Pilgrim', ['Apocalypse', 'Pilgrim']), []);
   assert.deepEqual(jeuxDansTexte('je vends just one et abyss', ['Just One', 'Abyss']), ['Just One', 'Abyss']);
 });
+
+test('annonces vendues ou en cours d\'achat écartées (cas réel : Akropolis de « Tribu », vendu depuis un mois)', () => {
+  const ad = (id, statut) => ({ list_id: id, subject: 'Akropolis NEUF', price: [16], url: 'https://www.leboncoin.fr/ad/jeux_jouets/' + id, owner: { user_id: 'u' + id, name: 'Tribu' },
+    location: { city: 'Annonay', zipcode: '07100' }, status: 'active', attributes: statut ? [{ key: 'transaction_status', value: statut, value_label: statut }] : [] });
+  const sd = { ads: [ad(1, null), ad(2, 'sold'), ad(3, 'pending')] };
+  assert.deepEqual(annoncesLbc(sd, 'Akropolis').map(a => a.url.slice(-1)), ['1']);
+  // Un lot vendu n'est pas lu non plus (la description coûte une requête).
+  const lot = (id, statut) => ({ ...ad(id, statut), subject: 'Lot de jeux de société' });
+  assert.deepEqual(lotsCandidats({ ads: [lot(4, null), lot(5, 'sold')] }, 'Akropolis').map(l => l.id), ['4']);
+});
