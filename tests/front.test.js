@@ -415,7 +415,7 @@ test('encart « Pour toi » : mécaniques favorites, durée, poids, duel, verdic
   const f = vm.runInNewContext(`${script}; ({ pourToi })`, { document: { querySelector: el }, location: { search: '' }, history: {}, fetch: async () => { throw new Error('x'); }, URLSearchParams });
   const txt = bgg => f.pourToi({ query: 'x', bgg }).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
   const sk = txt({ mecaniques: [{ id: 1, nom: 'Gestion de main' }, { id: 2, nom: 'Plis' }], duree: '30', poids: 1.6, joueurs: '2–8' });
-  assert.ok(sk.includes('Très ton style') && sk.includes('✓ plis') && !sk.includes('draft'), sk);
+  assert.ok(sk.includes('Très ton style') && sk.includes('✓ plis') && sk.includes('✓ deck building') && !sk.includes('draft'), sk);
   const toy = txt({ mecaniques: [{ id: 1, nom: 'Majorité' }], duree: '15', poids: 1.5, joueurs: '2' });
   assert.ok(toy.includes('✓ contrôle de zones') && toy.includes('✓ duel') && toy.includes('Dans tes goûts'), toy);
   const si = txt({ mecaniques: [{ id: 1, nom: 'Coopératif' }, { id: 2, nom: 'Deck building' }], duree: '90–120', poids: 4.08, joueurs: '1–4' });

@@ -275,9 +275,11 @@ function bggCard(d, games) {
 const PROFIL = {
   aime: [
     { nom: 'plis', mots: ['Plis', 'Montée en combinaisons'] },
-    // « Gestion de main » et « Bonus de fin de partie » écartés : trop courants (Skull King, Captain Flip ressortaient « combos »).
-    { nom: 'draft et combos', mots: ['Construction de tableau', 'Draft', 'Draft ouvert', 'Draft fermé', 'Collection', 'Deck building', 'Construction de deck'] },
+    // « Bonus de fin de partie » écarté : trop courant (Captain Flip ressortait « combos »).
+    { nom: 'draft et combos', mots: ['Construction de tableau', 'Draft', 'Draft ouvert', 'Draft fermé', 'Collection'] },
     { nom: 'stop ou encore', mots: ['Stop ou encore'] },
+    // Demandé par l'utilisateur (Dominion, Fantasy Realms, Château Combo, Fliptoons, Longue vie au roi) : « Gestion de main » compte ici.
+    { nom: 'deck building', mots: ['Deck building', 'Construction de deck', 'Gestion de main'] },
     { nom: 'pose de tuiles', mots: ['Pose de tuiles', 'Recouvrement de grille', 'Construction de motifs'] },
     { nom: 'bluff', mots: ['Bluff', 'Rôles cachés', 'Paris et bluff'] },
     // Toy Battle (59) et Zenith (37) : duels de majorité / tir à la corde.
@@ -302,7 +304,7 @@ function pourToi(d) {
   if (b.poids != null && b.poids > 0) { if (b.poids <= 2.5) oui.push('léger'); else if (b.poids > 3) non.push(`lourd (${fr(b.poids)}/5)`); }
   if (j.length && j[0] <= 2 && Math.max(...j) <= 2) oui.push('duel');
   const meca = oui.filter(x => x === 'duel' || PROFIL.aime.some(g => g.nom === x)).length; // mécaniques favorites (le duel compte)
-  const coeur = oui.filter(x => PROFIL.aime.slice(0, 3).some(g => g.nom === x)).length; // plis, draft et combos, stop ou encore
+  const coeur = oui.filter(x => PROFIL.aime.slice(0, 4).some(g => g.nom === x)).length; // plis, draft et combos, stop ou encore, deck building
   const verdict = !oui.length && !non.length ? null
     : non.length > oui.length ? 'Plutôt loin de tes habitudes'
     : !meca ? 'Aucune de tes mécaniques favorites' // court et léger ne suffisent pas (Codenames)
