@@ -411,6 +411,21 @@ test('sauvegarde Drive entre appareils : récupération à l\'ouverture, ignoré
   assert.deepEqual(sv.find(l => l.nom === 'Soirées').jeux, ['Dixit']);
 });
 
+test('encart « Pour toi » : mécaniques favorites, durée, poids, duel, verdict', () => {
+  const f = vm.runInNewContext(`${script}; ({ pourToi })`, { document: { querySelector: el }, location: { search: '' }, history: {}, fetch: async () => { throw new Error('x'); }, URLSearchParams });
+  const txt = bgg => f.pourToi({ query: 'x', bgg }).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+  const sk = txt({ mecaniques: [{ id: 1, nom: 'Gestion de main' }, { id: 2, nom: 'Plis' }], duree: '30', poids: 1.6, joueurs: '2–8' });
+  assert.ok(sk.includes('Très ton style') && sk.includes('✓ plis') && !sk.includes('draft'), sk);
+  const toy = txt({ mecaniques: [{ id: 1, nom: 'Majorité' }], duree: '15', poids: 1.5, joueurs: '2' });
+  assert.ok(toy.includes('✓ contrôle de zones') && toy.includes('✓ duel') && toy.includes('Dans tes goûts'), toy);
+  const si = txt({ mecaniques: [{ id: 1, nom: 'Coopératif' }, { id: 2, nom: 'Deck building' }], duree: '90–120', poids: 4.08, joueurs: '1–4' });
+  assert.ok(si.includes('Plutôt loin') && si.includes('✗ coopératif') && si.includes('✗ long (120 min)') && si.includes('✗ lourd (4,08/5)'), si);
+  const cn = txt({ mecaniques: [{ id: 1, nom: 'Déduction' }], duree: '15', poids: 1.3, joueurs: '2–8' });
+  assert.ok(cn.includes('Aucune de tes mécaniques favorites'), cn);
+  assert.equal(txt({ mecaniques: [{ id: 1, nom: 'Mémoire' }], duree: '50', poids: 2.8, joueurs: '3–5' }), '');
+  assert.equal(f.pourToi({ query: 'x', bgg: null }), '');
+});
+
 test('liste collée (un jeu par ligne, puces, numéros, tableur) → titres séparés par des virgules, espaces gardés', () => {
   const f = vm.runInNewContext(`${script}; ({ listeCollee })`, { document: { querySelector: el }, location: { search: '' }, history: {}, fetch: async () => { throw new Error('x'); }, URLSearchParams });
   assert.equal(f.listeCollee('7 Wonders Duel\r\n- Abyss\n\n2. Skull King\tAzul\n'), '7 Wonders Duel, Abyss, Skull King, Azul');

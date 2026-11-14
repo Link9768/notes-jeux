@@ -55,6 +55,8 @@ a{color:var(--acc)}
 .bga.non{background:var(--line);color:var(--mut)}
 .ml footer{padding:10px;text-align:center;border-top:1px solid var(--line)}
 .ml.bgg{border-color:var(--bgg)}
+.ml.toi{border-color:#7c5cd6}.ml.toi header{background:#7c5cd6}.ml.toi header .mut{color:#e9e3fb}
+.chip.ok{background:rgba(46,160,67,.22)}.chip.ko{background:rgba(218,54,51,.22)}
 .ml.bgg header{background:var(--bgg)}
 button.chip{border:0;color:var(--txt);font:inherit;font-size:12px;cursor:pointer}
 button.chip:hover,button.chip.on{background:var(--bgg);color:#fff}
@@ -267,6 +269,51 @@ function bggCard(d, games) {
   return `<section class="ml bgg"><header><b>BoardGameGeek</b><span>${b.annee ? esc(b.annee) : ''}</span></header><div class="body"><div>${note}<div class="box" id="extbox"></div></div><div class="facts">${facts}</div><div><h3>Style de jeu</h3>${style}</div></div>${pied}</section>`;
 }
 
+// « Pour toi » : profil de goûts déduit le 2026-11-14 des parties BGA (Captain Flip 123, Château Combo 120, Faraway 77,
+// Toy Battle 59, Akropolis 44, Skull King 40, Zenith 37…) et de la ludothèque, confirmé par l'utilisateur
+// (plis, combos de cartes, stop ou encore). Comparé aux mécaniques et catégories BGG du jeu (libellés de lib/bgg-fr.js).
+const PROFIL = {
+  aime: [
+    { nom: 'plis', mots: ['Plis', 'Montée en combinaisons'] },
+    // « Gestion de main » et « Bonus de fin de partie » écartés : trop courants (Skull King, Captain Flip ressortaient « combos »).
+    { nom: 'draft et combos', mots: ['Construction de tableau', 'Draft', 'Draft ouvert', 'Draft fermé', 'Collection', 'Deck building', 'Construction de deck'] },
+    { nom: 'stop ou encore', mots: ['Stop ou encore'] },
+    { nom: 'pose de tuiles', mots: ['Pose de tuiles', 'Recouvrement de grille', 'Construction de motifs'] },
+    { nom: 'bluff', mots: ['Bluff', 'Rôles cachés', 'Paris et bluff'] },
+    // Toy Battle (59) et Zenith (37) : duels de majorité / tir à la corde.
+    { nom: 'contrôle de zones', mots: ['Majorité', 'Zone de contrôle', 'Tir à la corde'] },
+  ],
+  evite: [
+    // Pas de « wargame » : Toy Battle (59 parties) est étiqueté ainsi ; la durée et le poids écartent déjà les jeux lourds.
+    { nom: 'coopératif', mots: ['Coopératif'] },
+    { nom: 'legacy', mots: ['Legacy'] },
+  ],
+};
+const nombres = s => (String(s || '').match(/\d+(?:[.,]\d+)?/g) || []).map(x => Number(x.replace(',', '.')));
+function pourToi(d) {
+  const b = d.bgg;
+  if (!b) return '';
+  const tags = new Set([...(b.mecaniques || []).map(x => (typeof x === 'string' ? x : x.nom)), ...(b.themes || [])]);
+  const a = (p) => p.filter(g => g.mots.some(m => tags.has(m))).map(g => g.nom);
+  const oui = a(PROFIL.aime), non = a(PROFIL.evite);
+  const duree = Math.max(...nombres(b.duree), 0), j = nombres(b.joueurs);
+  // Seuils calés sur tes jeux : Zenith 25–35 min, poids 2,32.
+  if (duree && duree <= 40) oui.push('partie courte'); else if (duree > 60) non.push(`long (${duree} min)`);
+  if (b.poids != null && b.poids > 0) { if (b.poids <= 2.5) oui.push('léger'); else if (b.poids > 3) non.push(`lourd (${fr(b.poids)}/5)`); }
+  if (j.length && j[0] <= 2 && Math.max(...j) <= 2) oui.push('duel');
+  const meca = oui.filter(x => x === 'duel' || PROFIL.aime.some(g => g.nom === x)).length; // mécaniques favorites (le duel compte)
+  const coeur = oui.filter(x => PROFIL.aime.slice(0, 3).some(g => g.nom === x)).length; // plis, draft et combos, stop ou encore
+  const verdict = !oui.length && !non.length ? null
+    : non.length > oui.length ? 'Plutôt loin de tes habitudes'
+    : !meca ? 'Aucune de tes mécaniques favorites' // court et léger ne suffisent pas (Codenames)
+    : coeur && oui.length >= 3 && !non.length ? 'Très ton style'
+    : oui.length > non.length ? 'Dans tes goûts' : 'Hors de tes habitudes';
+  if (!verdict) return '';
+  const possede = dansListe(LUDO, titreJeu(d)) ? '<span class="mut">📚 dans ta ludothèque</span>' : '';
+  const chips = [...oui.map(x => `<span class="chip ok">✓ ${esc(x)}</span>`), ...non.map(x => `<span class="chip ko">✗ ${esc(x)}</span>`)].join('');
+  return `<section class="ml toi"><header><b>Pour toi · ${esc(verdict)}</b>${possede}</header><div class="body"><div class="chips">${chips}</div></div></section>`;
+}
+
 // Board Game Arena : liste des jeux publics (lib/bga-games.json, régénérée par scripts/build-bga-list.mjs) chargée avec la page.
 // Entrée : [slug, titre anglais, bggId (0 si inconnu), ...alias]. null tant qu'elle n'est pas lue (ou si elle est injoignable).
 const BGA = fetch('lib/bga-games.json').then(r => (r.ok ? r.json() : null)).catch(() => null);
@@ -350,7 +397,7 @@ function render(d, games) {
     : `<div class="head"><div><h1>${esc(d.query)}</h1><div class="mut">${bgaBadge(d, games)}${duoBadge(d)}</div>${listesMenu(d)}</div></div>`;
   // Tuile MyLudo minimaliste, comme les boutiques : note, nombre de notes, titre retenu, difficulté MyLudo (⚖ sur 5, en plus de celle de BGG).
   const tiles = `<div class="tiles">${tile('Esprit Jeu', 'var(--ej)', d.espritjeu, 5, 'avis', L.espritjeu)}${tile('Philibert', 'var(--ph)', d.philibert, 5, 'avis', L.philibert)}${tile('MyLudo', 'var(--ml)', m && { note: m.note, avis: m.avis, titre: m.titre, url: m.url, poids: m.complexite }, 10, 'notes', L.myludo || '#')}</div>`;
-  $('#out').innerHTML = `${retour()}${ongletsHtml()}${head}${tiles}${bggCard(d, games)}${semblables(d)}${jumeauxBloc(d)}${auteur(m)}${okk(d.okkazeo, L.okkazeo, prixNeuf(d))}<div id="videos"></div>`;
+  $('#out').innerHTML = `${retour()}${ongletsHtml()}${head}${tiles}${bggCard(d, games)}${pourToi(d)}${semblables(d)}${jumeauxBloc(d)}${auteur(m)}${okk(d.okkazeo, L.okkazeo, prixNeuf(d))}<div id="videos"></div>`;
   majVers();
   // Jumeaux préchargés en arrière-plan (réponse gardée par outil) : le clic sur 🎯 déplie sans attente.
   if (d.bgg && d.bgg.id) outil({ op: 'jumeaux', id: d.bgg.id }).catch(() => {});
