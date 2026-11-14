@@ -402,8 +402,8 @@ function titresOuverts() {
 }
 function majVers() {
   const v = $('#vers');
-  const n = listes.reduce((s, l) => s + l.jeux.length, 0);
-  if (v) v.innerHTML = `<button type="button" class="petit" id="versListes">📋 Mes listes${n ? ` (${n})` : ''}</button>`
+  const n = listes.filter(l => l.nom !== LUDO).reduce((s, l) => s + l.jeux.length, 0), nl = listes.find(l => l.nom === LUDO).jeux.length;
+  if (v) v.innerHTML = `<button type="button" class="petit" id="versListes">📋 Mes listes${n ? ` (${n})` : ''}</button><button type="button" class="petit" id="versLudo">📚 Ma ludothèque${nl ? ` (${nl})` : ''}</button>`
     + (onglets.length >= 2 ? `<button type="button" class="petit" id="versPanier">🛒 ${onglets.length} jeux → matchmaking</button>` : '');
 }
 
@@ -411,11 +411,17 @@ function majVers() {
 // (localStorage, propres à cet appareil) ; stockage indisponible → listes gardées le temps de la page.
 const LISTES_CLE = 'notesJeux.listes';
 const LISTE_BGA = 'À tester sur BGA';
-const LISTES_FIXES = ['À essayer', 'À acheter', LISTE_BGA];
+// Ma ludothèque : jeux possédés, préremplie à la première ouverture sur chaque appareil (ensuite modifiable, propre à l'appareil).
+const LUDO = 'Ma ludothèque';
+const LUDO_INIT = ['Celestia', 'Château Combo', 'Faraway', 'Moustache', 'Miams', 'Oriflamme', 'Gang of Four', 'Flip 7', 'DJ7', 'Monopoly Deal', 'Présages', 'Fliptoons',
+  'Citadelles', 'Skull', 'Skull King', 'Zenith', 'Take Time', 'Ready Set Bet', 'Les Charlatans de Belcastel', 'Colt Express', 'Challengers', 'Carcassonne', 'Très Futé',
+  'Galaxy Trucker', 'Le Seigneur des Anneaux Duel', '7 Wonders Duel', 'Ganymede', 'Shards of Infinity', 'Dominion', 'Cartagena', 'Kingdomino', 'Fantasy Realms',
+  'Res Arcana', 'The Vale of Eternity', 'Odin', 'Service Compris', 'Time Bomb', 'Schotten Totten'];
+const LISTES_FIXES = ['À essayer', 'À acheter', LISTE_BGA, LUDO];
 function lireListes() {
   let l = [];
   try { l = JSON.parse(localStorage.getItem(LISTES_CLE)) || []; } catch (e) { l = []; }
-  for (const nom of [...LISTES_FIXES].reverse()) if (!l.some(x => x.nom === nom)) l.unshift({ nom, jeux: [] });
+  for (const nom of [...LISTES_FIXES].reverse()) if (!l.some(x => x.nom === nom)) l.unshift({ nom, jeux: nom === LUDO ? [...LUDO_INIT] : [] });
   return l;
 }
 const listes = lireListes();
@@ -445,16 +451,25 @@ function listesMenu(d) {
 }
 // Écran « Mes listes » : jeux cliquables (ouverts comme un 🔍), ✕ pour retirer, 🛒 vers le matchmaking, suppression des listes créées.
 function listesHtml() {
-  return `<h2 class="titre-l">📋 Mes listes</h2>${listes.map(l => `<section class="aut"><h3>${esc(l.nom)} · ${l.jeux.length}</h3>${l.jeux.length
+  return `<h2 class="titre-l">📋 Mes listes</h2>${listes.filter(l => l.nom !== LUDO).map(l => `<section class="aut"><h3>${esc(l.nom)} · ${l.jeux.length}</h3>${l.jeux.length
     ? l.jeux.map(j => `<div class="sim"><button type="button" class="lien" data-q="${esc(j)}">${esc(j)}</button><button type="button" class="x" data-retire="${esc(l.nom)}" data-titre="${esc(j)}" aria-label="Retirer ${esc(j)}" title="Retirer">✕</button></div>`).join('')
     : '<p class="na">Vide.</p>'}<div class="actl">${l.jeux.length >= 2 ? `<button type="button" class="petit" data-panier="${esc(l.nom)}">🛒 ${l.jeux.length} jeux → matchmaking</button>` : ''}${LISTES_FIXES.includes(l.nom) ? '' : `<button type="button" class="petit" data-suppr="${esc(l.nom)}">Supprimer la liste</button>`}</div></section>`).join('')}<section class="aut"><h3>Nouvelle liste</h3>${champListe}</section>`;
 }
-function afficherListes() {
+const champJeu = '<div class="nvlw"><input class="nvl" maxlength="60" placeholder="Titre du jeu" aria-label="Jeu à ajouter à ma ludothèque"><button type="button" class="petit" data-ajout="1">Ajouter</button></div>';
+function ludoHtml() {
+  const jeux = [...listes.find(l => l.nom === LUDO).jeux].sort((a, b) => a.localeCompare(b, 'fr'));
+  return `<h2 class="titre-l">📚 Ma ludothèque · ${jeux.length} jeu${jeux.length > 1 ? 'x' : ''}</h2><section class="aut">${jeux.length
+    ? jeux.map(j => `<div class="sim"><button type="button" class="lien" data-q="${esc(j)}">${esc(j)}</button><button type="button" class="x" data-retire="${esc(LUDO)}" data-titre="${esc(j)}" aria-label="Retirer ${esc(j)}" title="Retirer">✕</button></div>`).join('')
+    : '<p class="na">Vide.</p>'}</section><section class="aut"><h3>Ajouter un jeu</h3>${champJeu}</section>`;
+}
+let vueListes = 'listes'; // écran affiché : « listes » ou « ludo » (✕ et ajouts le réaffichent)
+function afficherListes(vue = 'listes') {
+  vueListes = vue;
   if (affiche && courant) pile.push(courant); // « ← Retour à » ramène au jeu d'où l'on vient
   seq++;
   affiche = null;
   comparant = false;
-  $('#out').innerHTML = `${retour()}${ongletsHtml()}${listesHtml()}`;
+  $('#out').innerHTML = `${retour()}${ongletsHtml()}${vue === 'ludo' ? ludoHtml() : listesHtml()}`;
   majVers();
 }
 // Après un ajout / retrait : pastilles du jeu affiché mises à jour sur place (les encarts dépliés restent ouverts).
@@ -603,17 +618,24 @@ $('#out').addEventListener('click', e => {
   if (nv) {
     const nom = creerListe(nv.closest('.nvlw').querySelector('input').value);
     if (!nom) return;
-    if (!affiche) { afficherListes(); return; }
+    if (!affiche) { afficherListes(vueListes); return; }
     basculer(nom, titreJeu(affiche)); // créée depuis un jeu : il y est ajouté
     BGA.then(games => { render(affiche, games); const m = $('.addl'); if (m) m.open = true; });
     return;
   }
   const re = t('[data-retire]');
-  if (re) { basculer(re.dataset.retire, re.dataset.titre); afficherListes(); return; }
+  if (re) { basculer(re.dataset.retire, re.dataset.titre); afficherListes(vueListes); return; }
+  const aj = t('[data-ajout]');
+  if (aj) {
+    const titre = aj.closest('.nvlw').querySelector('input').value.trim().slice(0, 60);
+    if (titre && !dansListe(LUDO, titre)) basculer(LUDO, titre);
+    afficherListes('ludo');
+    return;
+  }
   const su = t('[data-suppr]');
   if (su) {
     const i = listes.findIndex(l => l.nom === su.dataset.suppr);
-    if (i >= 0 && confirm(`Supprimer la liste « ${listes[i].nom} » ?`)) { listes.splice(i, 1); sauverListes(); afficherListes(); }
+    if (i >= 0 && confirm(`Supprimer la liste « ${listes[i].nom} » ?`)) { listes.splice(i, 1); sauverListes(); afficherListes(vueListes); }
     return;
   }
   const pa = t('[data-panier]');
@@ -649,6 +671,7 @@ $('#vers').addEventListener('click', e => {
   const t = s => e.target.closest && e.target.closest(s);
   if (t('#versPanier')) versPanier(titresOuverts());
   else if (t('#versListes')) { afficherListes(); scrollTo(0, 0); }
+  else if (t('#versLudo')) { afficherListes('ludo'); scrollTo(0, 0); }
 });
 
 // Liste collée (un jeu par ligne, ou cellules d'un tableur) : chaque retour à la ligne / tabulation devient une virgule,

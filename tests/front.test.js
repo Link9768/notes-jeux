@@ -298,7 +298,7 @@ test('listes : ajout depuis le jeu, gardées dans localStorage, écran « Mes li
     localStorage: { getItem: k => stock[k] ?? null, setItem: (k, v) => { stock[k] = v; } },
     fetch: async u => (String(u).includes('notes-jeux?q=') ? { ok: true, json: async () => ({ query: 'abyss', myludo: { titre: 'Abyss' }, liens: { bgg: '#' }, okkazeo: null }) } : { ok: false }) };
   const f = vm.runInNewContext(`${script}; ({ lancer, listes })`, ctx);
-  assert.deepEqual([...f.listes.map(l => l.nom)], ['À essayer', 'À acheter', 'À tester sur BGA']);
+  assert.deepEqual([...f.listes.map(l => l.nom)], ['À essayer', 'À acheter', 'À tester sur BGA', 'Ma ludothèque']);
   f.lancer('abyss');
   await new Promise(r => setTimeout(r, 10));
   const out = els['#out'];
@@ -385,4 +385,32 @@ test('rejouabilité dans l\'encart BGG : niveau, parties par propriétaire, cas 
   assert.ok(f.rejouHtml({ niveau: 'faible', parties: 1.8, type: null, proprietaires: 246777, ancien: true }).includes('jeu ancien'));
   assert.ok(f.rejouHtml({ niveau: 'moyenne', parties: 2.8, type: null, proprietaires: 504 }).includes('peu de données'));
   assert.equal(f.rejouHtml(null), '');
+});
+
+test('ma ludothèque : 38 jeux préremplis, bouton à côté de Mes listes, hors du compteur et de l\'écran Mes listes, ajout et retrait', async () => {
+  const stock = {};
+  const els = {};
+  const elx = sel => (els[sel] = els[sel] || { innerHTML: '', value: '', handlers: {}, addEventListener(t, h) { this.handlers[t] = h; }, querySelectorAll: () => [], scrollIntoView() {}, focus() {} });
+  const ctx = { document: { querySelector: elx }, location: { search: '' }, history: { replaceState() {} }, scrollTo() {}, URLSearchParams,
+    localStorage: { getItem: k => stock[k] ?? null, setItem: (k, v) => { stock[k] = v; } }, fetch: async () => ({ ok: false }) };
+  const f = vm.runInNewContext(`${script}; ({ listes, afficherListes, majVers })`, ctx);
+  const ludo = f.listes.find(l => l.nom === 'Ma ludothèque');
+  assert.equal(ludo.jeux.length, 38);
+  for (const j of ['Celestia', 'Skull King', '7 Wonders Duel', 'Schotten Totten', 'Service Compris']) assert.ok(ludo.jeux.includes(j), j);
+  f.majVers();
+  assert.ok(els['#vers'].innerHTML.includes('📚 Ma ludothèque (38)') && els['#vers'].innerHTML.includes('📋 Mes listes'));
+  assert.ok(!els['#vers'].innerHTML.includes('Mes listes ('), 'la ludothèque ne compte pas dans Mes listes');
+  f.afficherListes();
+  assert.ok(!els['#out'].innerHTML.includes('Ma ludothèque'));
+  f.afficherListes('ludo');
+  const out = els['#out'];
+  assert.ok(out.innerHTML.includes('Ma ludothèque · 38 jeux') && out.innerHTML.includes('data-q="Faraway"') && out.innerHTML.indexOf('Carcassonne') < out.innerHTML.indexOf('Zenith'), 'triée');
+  const clic = cible => out.handlers.click({ target: { closest: s => cible(s) } });
+  clic(s => (s === '[data-ajout]' ? { closest: () => ({ querySelector: () => ({ value: ' Azul ' }) }) } : null));
+  assert.ok(out.innerHTML.includes('39 jeux') && out.innerHTML.includes('data-q="Azul"'));
+  clic(s => (s === '[data-ajout]' ? { closest: () => ({ querySelector: () => ({ value: 'azul' }) }) } : null));
+  assert.ok(out.innerHTML.includes('39 jeux'), 'doublon refusé');
+  clic(s => (s === '[data-retire]' ? { dataset: { retire: 'Ma ludothèque', titre: 'Azul' } } : null));
+  assert.ok(out.innerHTML.includes('38 jeux') && out.innerHTML.includes('Ma ludothèque'), 'le retrait réaffiche la ludothèque');
+  assert.equal(JSON.parse(stock['notesJeux.listes']).find(l => l.nom === 'Ma ludothèque').jeux.length, 38);
 });
