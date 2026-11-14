@@ -458,10 +458,16 @@ test('ma ludothèque : 38 jeux préremplis, bouton à côté de Mes listes, hors
   const out = els['#out'];
   assert.ok(out.innerHTML.includes('Ma ludothèque · 38 jeux') && out.innerHTML.includes('data-q="Faraway"') && out.innerHTML.indexOf('Carcassonne') < out.innerHTML.indexOf('Zenith'), 'triée');
   const clic = cible => out.handlers.click({ target: { closest: s => cible(s) } });
-  clic(s => (s === '[data-ajout]' ? { closest: () => ({ querySelector: () => ({ value: ' Azul ' }) }) } : null));
+  clic(s => (s === '[data-ajout]' ? { dataset: { ajout: 'Ma ludothèque' }, closest: () => ({ querySelector: () => ({ value: ' Azul ' }) }) } : null));
   assert.ok(out.innerHTML.includes('39 jeux') && out.innerHTML.includes('data-q="Azul"'));
-  clic(s => (s === '[data-ajout]' ? { closest: () => ({ querySelector: () => ({ value: 'azul' }) }) } : null));
+  clic(s => (s === '[data-ajout]' ? { dataset: { ajout: 'Ma ludothèque' }, closest: () => ({ querySelector: () => ({ value: 'azul' }) }) } : null));
   assert.ok(out.innerHTML.includes('39 jeux'), 'doublon refusé');
+  // Mes listes : chaque liste (même vide) a son champ « Ajouter un jeu »
+  f.afficherListes();
+  assert.ok(out.innerHTML.includes('data-ajout="À tester sur BGA"') && out.innerHTML.includes('data-ajout="À essayer"'));
+  clic(s => (s === '[data-ajout]' ? { dataset: { ajout: 'À tester sur BGA' }, closest: () => ({ querySelector: () => ({ value: 'Wingspan' }) }) } : null));
+  assert.ok(out.innerHTML.includes('À tester sur BGA · 1') && out.innerHTML.includes('data-q="Wingspan"') && out.innerHTML.includes('Mes listes'));
+  f.afficherListes('ludo');
   clic(s => (s === '[data-retire]' ? { dataset: { retire: 'Ma ludothèque', titre: 'Azul' } } : null));
   assert.ok(out.innerHTML.includes('38 jeux') && out.innerHTML.includes('Ma ludothèque'), 'le retrait réaffiche la ludothèque');
   assert.equal(JSON.parse(stock['notesJeux.listes']).find(l => l.nom === 'Ma ludothèque').jeux.length, 38);

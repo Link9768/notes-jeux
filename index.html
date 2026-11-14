@@ -525,14 +525,14 @@ function listesMenu(d) {
 function listesHtml() {
   return `<h2 class="titre-l">📋 Mes listes</h2>${listes.filter(l => l.nom !== LUDO).map(l => `<section class="aut"><h3>${esc(l.nom)} · ${l.jeux.length}</h3>${l.jeux.length
     ? l.jeux.map(j => `<div class="sim"><button type="button" class="lien" data-q="${esc(j)}">${esc(j)}</button><button type="button" class="x" data-retire="${esc(l.nom)}" data-titre="${esc(j)}" aria-label="Retirer ${esc(j)}" title="Retirer">✕</button></div>`).join('')
-    : '<p class="na">Vide.</p>'}<div class="actl">${l.jeux.length >= 2 ? `<button type="button" class="petit" data-panier="${esc(l.nom)}">🛒 ${l.jeux.length} jeux → matchmaking</button>` : ''}${LISTES_FIXES.includes(l.nom) ? '' : `<button type="button" class="petit" data-suppr="${esc(l.nom)}">Supprimer la liste</button>`}</div></section>`).join('')}<section class="aut"><h3>Nouvelle liste</h3>${champListe}</section>${sauvHtml()}`;
+    : '<p class="na">Vide.</p>'}${champJeu(l.nom)}<div class="actl">${l.jeux.length >= 2 ? `<button type="button" class="petit" data-panier="${esc(l.nom)}">🛒 ${l.jeux.length} jeux → matchmaking</button>` : ''}${LISTES_FIXES.includes(l.nom) ? '' : `<button type="button" class="petit" data-suppr="${esc(l.nom)}">Supprimer la liste</button>`}</div></section>`).join('')}<section class="aut"><h3>Nouvelle liste</h3>${champListe}</section>${sauvHtml()}`;
 }
-const champJeu = '<div class="nvlw"><input class="nvl" maxlength="60" placeholder="Titre du jeu" aria-label="Jeu à ajouter à ma ludothèque"><button type="button" class="petit" data-ajout="1">Ajouter</button></div>';
+const champJeu = nom => `<div class="nvlw"><input class="nvl" maxlength="60" placeholder="Ajouter un jeu" aria-label="Jeu à ajouter à ${esc(nom)}"><button type="button" class="petit" data-ajout="${esc(nom)}">Ajouter</button></div>`;
 function ludoHtml() {
   const jeux = [...listes.find(l => l.nom === LUDO).jeux].sort((a, b) => a.localeCompare(b, 'fr'));
   return `<h2 class="titre-l">📚 Ma ludothèque · ${jeux.length} jeu${jeux.length > 1 ? 'x' : ''}</h2><section class="aut">${jeux.length
     ? jeux.map(j => `<div class="sim"><button type="button" class="lien" data-q="${esc(j)}">${esc(j)}</button><button type="button" class="x" data-retire="${esc(LUDO)}" data-titre="${esc(j)}" aria-label="Retirer ${esc(j)}" title="Retirer">✕</button></div>`).join('')
-    : '<p class="na">Vide.</p>'}</section><section class="aut"><h3>Ajouter un jeu</h3>${champJeu}</section>`;
+    : '<p class="na">Vide.</p>'}</section><section class="aut"><h3>Ajouter un jeu</h3>${champJeu(LUDO)}</section>`;
 }
 let vueListes = 'listes'; // écran affiché : « listes » ou « ludo » (✕ et ajouts le réaffichent)
 function afficherListes(vue = 'listes') {
@@ -700,8 +700,9 @@ $('#out').addEventListener('click', e => {
   const aj = t('[data-ajout]');
   if (aj) {
     const titre = aj.closest('.nvlw').querySelector('input').value.trim().slice(0, 60);
-    if (titre && !dansListe(LUDO, titre)) basculer(LUDO, titre);
-    afficherListes('ludo');
+    const nom = aj.dataset.ajout;
+    if (titre && listes.some(l => l.nom === nom) && !dansListe(nom, titre)) basculer(nom, titre);
+    afficherListes(nom === LUDO ? 'ludo' : 'listes');
     return;
   }
   const sv = t('[data-sauv]');
