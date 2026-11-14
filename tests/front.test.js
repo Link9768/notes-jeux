@@ -370,6 +370,47 @@ test('sauvegarde Drive : connexion (sauvegarde vide / existante / clé refusée)
   assert.ok(!stock['notesJeux.cle'] && !stock['notesJeux.sync']);
 });
 
+test('sauvegarde Drive entre appareils : récupération à l\'ouverture, ignorée si pas plus récente, fusion au lieu d\'écraser', async () => {
+  const stock = { 'notesJeux.cle': 'k', 'notesJeux.sync': '2026-11-14T10:00:00.000Z' }, appels = [];
+  let serveur = { ok: true, vide: true };
+  const els = {};
+  const elx = sel => (els[sel] = els[sel] || { innerHTML: '', value: '', textContent: '', handlers: {}, addEventListener(t, h) { this.handlers[t] = h; }, querySelectorAll: () => [], scrollIntoView() {}, focus() {} });
+  const ctx = { document: { querySelector: elx }, location: { search: '' }, history: { replaceState() {} }, scrollTo() {}, URLSearchParams,
+    localStorage: { getItem: k => stock[k] ?? null, setItem: (k, v) => { stock[k] = v; }, removeItem: k => { delete stock[k]; } },
+    setTimeout: () => 1, clearTimeout() {}, confirm: () => true,
+    fetch: async (u, o) => { const b = JSON.parse(o.body); appels.push(b); return { ok: true, status: 200, json: async () => (b.op === 'load' ? serveur : { ok: true }) }; } };
+  const f = vm.runInNewContext(`${script}; ({ listes, synchroniser, sauvegarder, afficherListes })`, ctx);
+  const jeux = nom => [...f.listes.find(l => l.nom === nom).jeux];
+  // sauvegarde du serveur identique ou plus ancienne : rien ne change
+  serveur = { ok: true, data: { date: '2026-11-14T10:00:00.000Z', listes: [{ nom: 'À essayer', jeux: ['Ancien'] }] } };
+  await f.synchroniser();
+  assert.deepEqual(jeux('À essayer'), []);
+  // plus récente (faite depuis le téléphone) : remplace les listes d'ici
+  serveur = { ok: true, data: { date: '2026-11-14T18:00:00.000Z', listes: [{ nom: 'À tester sur BGA', jeux: ['Skyjo'] }] } };
+  await f.synchroniser();
+  assert.deepEqual(jeux('À tester sur BGA'), ['Skyjo']);
+  assert.equal(stock['notesJeux.sync'], '2026-11-14T18:00:00.000Z');
+  assert.ok(JSON.parse(stock['notesJeux.listes']).find(l => l.nom === 'À tester sur BGA').jeux.includes('Skyjo'));
+  // l'écran Mes listes ouvert est réaffiché avec les nouvelles données
+  f.afficherListes();
+  serveur = { ok: true, data: { date: '2026-11-14T19:00:00.000Z', listes: [{ nom: 'À tester sur BGA', jeux: ['Skyjo', 'Azul'] }] } };
+  await f.synchroniser();
+  assert.ok(els['#out'].innerHTML.includes('data-q="Azul"'));
+  // appareil non synchronisé : aucun appel réseau, aucune écrasement
+  delete stock['notesJeux.sync'];
+  appels.length = 0;
+  await f.synchroniser();
+  assert.equal(appels.length, 0);
+  // sauvegarde alors qu'un autre appareil a sauvegardé entre-temps : fusion, rien n'est perdu
+  stock['notesJeux.sync'] = '2026-11-14T19:00:00.000Z';
+  serveur = { ok: true, data: { date: '2026-11-14T20:00:00.000Z', listes: [{ nom: 'À acheter', jeux: ['Wingspan'] }, { nom: 'Soirées', jeux: ['Dixit'] }] } };
+  await f.sauvegarder();
+  const sv = appels.filter(a => a.op === 'save').pop().data.listes;
+  assert.deepEqual(sv.find(l => l.nom === 'À acheter').jeux, ['Wingspan']);
+  assert.deepEqual(sv.find(l => l.nom === 'À tester sur BGA').jeux, ['Skyjo', 'Azul'], 'ses propres ajouts gardés');
+  assert.deepEqual(sv.find(l => l.nom === 'Soirées').jeux, ['Dixit']);
+});
+
 test('liste collée (un jeu par ligne, puces, numéros, tableur) → titres séparés par des virgules, espaces gardés', () => {
   const f = vm.runInNewContext(`${script}; ({ listeCollee })`, { document: { querySelector: el }, location: { search: '' }, history: {}, fetch: async () => { throw new Error('x'); }, URLSearchParams });
   assert.equal(f.listeCollee('7 Wonders Duel\r\n- Abyss\n\n2. Skull King\tAzul\n'), '7 Wonders Duel, Abyss, Skull King, Azul');

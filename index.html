@@ -445,7 +445,23 @@ async function sauvAppel(op, data) {
   if (!r.ok || !j.ok) throw new Error(j.erreur || 'HTTP ' + r.status);
   return j;
 }
+// Un autre appareil a sauvegardé depuis notre dernière synchro : on ajoute ses jeux aux nôtres au lieu de les écraser
+// (un retrait fait ailleurs peut alors réapparaître : mieux que perdre un ajout).
+function fusionner(d) {
+  if (!d || !Array.isArray(d.listes)) return;
+  for (const x of d.listes) {
+    if (!x || typeof x.nom !== 'string' || !Array.isArray(x.jeux)) continue;
+    let l = listes.find(y => y.nom === x.nom);
+    if (!l) { l = { nom: x.nom.slice(0, 40), jeux: [] }; listes.push(l); }
+    for (const j of x.jeux) if (typeof j === 'string' && !l.jeux.some(k => memeJeu(k, j))) l.jeux.push(j);
+  }
+  try { localStorage.setItem(LISTES_CLE, JSON.stringify(listes)); } catch (e) { /* voir lireListes */ }
+}
 async function sauvegarder() {
+  if (lsGet(SAUV_SYNC)) {
+    const j = await sauvAppel('load');
+    if (!j.vide && j.data && j.data.date > lsGet(SAUV_SYNC)) fusionner(j.data);
+  }
   const date = new Date().toISOString();
   await sauvAppel('save', { listes, date });
   lsSet(SAUV_SYNC, date);
@@ -461,6 +477,16 @@ function planSauvegarde() {
   if (!lsGet(SAUV_CLE) || !lsGet(SAUV_SYNC) || typeof setTimeout !== 'function') return;
   clearTimeout(sauvTimer);
   sauvTimer = setTimeout(() => sauvegarder().then(() => { sauvEtat = ''; }, e => { sauvEtat = '⚠ Sauvegarde automatique échouée : ' + e.message; }), 3000);
+}
+// À l'ouverture et quand on revient sur l'onglet : si Drive a une sauvegarde plus récente (faite depuis un autre appareil),
+// elle remplace les listes d'ici. Sans effet tant que l'appareil n'est pas synchronisé (pas de clé / pas de 1re synchro).
+async function synchroniser() {
+  if (!lsGet(SAUV_CLE) || !lsGet(SAUV_SYNC)) return;
+  const j = await sauvAppel('load');
+  if (j.vide || !j.data || !(j.data.date > lsGet(SAUV_SYNC))) return;
+  restaurer(j.data);
+  majVers();
+  if ($('#out').innerHTML.includes('titre-l')) afficherListes(vueListes); // écran Mes listes / ludothèque ouvert : réaffiché
 }
 const dateFr = iso => { const d = new Date(iso); return isNaN(d) ? '' : d.toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }); };
 function sauvHtml() {
@@ -860,6 +886,8 @@ $('#pf').addEventListener('submit', async e => {
 });
 
 majVers();
+synchroniser().catch(() => {});
+if (document.addEventListener) document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') synchroniser().catch(() => {}); });
 const initial = new URLSearchParams(location.search).get('q');
 if (initial) lancer(initial.trim());
 </script>
