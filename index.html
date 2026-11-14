@@ -418,14 +418,86 @@ const LUDO_INIT = ['Celestia', 'Château Combo', 'Faraway', 'Moustache', 'Miams'
   'Galaxy Trucker', 'Le Seigneur des Anneaux Duel', '7 Wonders Duel', 'Ganymede', 'Shards of Infinity', 'Dominion', 'Cartagena', 'Kingdomino', 'Fantasy Realms',
   'Res Arcana', 'The Vale of Eternity', 'Odin', 'Service Compris', 'Time Bomb', 'Schotten Totten'];
 const LISTES_FIXES = ['À essayer', 'À acheter', LISTE_BGA, LUDO];
-function lireListes() {
-  let l = [];
-  try { l = JSON.parse(localStorage.getItem(LISTES_CLE)) || []; } catch (e) { l = []; }
+function completerListes(l) {
   for (const nom of [...LISTES_FIXES].reverse()) if (!l.some(x => x.nom === nom)) l.unshift({ nom, jeux: nom === LUDO ? [...LUDO_INIT] : [] });
   return l;
 }
+function lireListes() {
+  let l = [];
+  try { l = JSON.parse(localStorage.getItem(LISTES_CLE)) || []; } catch (e) { l = []; }
+  return completerListes(l);
+}
 const listes = lireListes();
-const sauverListes = () => { try { localStorage.setItem(LISTES_CLE, JSON.stringify(listes)); } catch (e) { /* voir lireListes */ } };
+const sauverListes = () => { try { localStorage.setItem(LISTES_CLE, JSON.stringify(listes)); } catch (e) { /* voir lireListes */ } planSauvegarde(); };
+
+// Sauvegarde sur Google Drive via n8n (workflow « Sauvegarde — Drive ») : la clé est saisie une fois par appareil (localStorage).
+// Sauvegarde automatique 3 s après chaque modification, mais seulement une fois l'appareil synchronisé (première sauvegarde ou
+// restauration faite) : un téléphone neuf ne doit pas écraser la sauvegarde avec des listes vides.
+const SAUV_URL = 'https://n8n.srv1250642.hstgr.cloud/webhook/sauvegarde';
+const SAUV_CLE = 'notesJeux.cle', SAUV_SYNC = 'notesJeux.sync';
+const lsGet = k => { try { return localStorage.getItem(k); } catch (e) { return null; } };
+const lsSet = (k, v) => { try { if (v == null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) { /* stockage indisponible */ } };
+let sauvEtat = '';
+let sauvTimer = null;
+async function sauvAppel(op, data) {
+  const r = await fetch(SAUV_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cle: lsGet(SAUV_CLE), app: 'notes-jeux', op, data }) });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok || !j.ok) throw new Error(j.erreur || 'HTTP ' + r.status);
+  return j;
+}
+async function sauvegarder() {
+  const date = new Date().toISOString();
+  await sauvAppel('save', { listes, date });
+  lsSet(SAUV_SYNC, date);
+  return date;
+}
+function restaurer(d) {
+  if (!d || !Array.isArray(d.listes) || !d.listes.every(x => x && typeof x.nom === 'string' && Array.isArray(x.jeux))) throw new Error('sauvegarde illisible');
+  listes.splice(0, listes.length, ...completerListes(d.listes.map(x => ({ nom: x.nom.slice(0, 40), jeux: x.jeux.filter(j => typeof j === 'string') }))));
+  try { localStorage.setItem(LISTES_CLE, JSON.stringify(listes)); } catch (e) { /* voir lireListes */ }
+  lsSet(SAUV_SYNC, d.date || new Date().toISOString());
+}
+function planSauvegarde() {
+  if (!lsGet(SAUV_CLE) || !lsGet(SAUV_SYNC) || typeof setTimeout !== 'function') return;
+  clearTimeout(sauvTimer);
+  sauvTimer = setTimeout(() => sauvegarder().then(() => { sauvEtat = ''; }, e => { sauvEtat = '⚠ Sauvegarde automatique échouée : ' + e.message; }), 3000);
+}
+const dateFr = iso => { const d = new Date(iso); return isNaN(d) ? '' : d.toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }); };
+function sauvHtml() {
+  const cle = lsGet(SAUV_CLE), sync = lsGet(SAUV_SYNC);
+  const etat = `<p class="na" id="sauvetat">${esc(sauvEtat || (sync ? 'Dernière sauvegarde : ' + dateFr(sync) : ''))}</p>`;
+  if (!cle) return `<section class="aut"><h3>☁ Sauvegarde</h3><p class="na">Colle ta clé de sauvegarde (une seule fois par appareil) pour garder tes listes sur Google Drive et les retrouver sur un autre appareil.</p><div class="nvlw"><input class="nvl" id="sauvcle" type="password" autocomplete="off" placeholder="Clé de sauvegarde" aria-label="Clé de sauvegarde"><button type="button" class="petit" data-sauv="cle">Connecter</button></div>${etat}</section>`;
+  return `<section class="aut"><h3>☁ Sauvegarde</h3>${etat}<div class="actl"><button type="button" class="petit" data-sauv="save">Sauvegarder</button><button type="button" class="petit" data-sauv="load">Restaurer</button><button type="button" class="petit" data-sauv="oubli">Oublier la clé</button></div></section>`;
+}
+async function sauvAction(a) {
+  const maj = m => { sauvEtat = m; const e = $('#sauvetat'); if (e) e.textContent = m; };
+  try {
+    if (a === 'oubli') { lsSet(SAUV_CLE, null); lsSet(SAUV_SYNC, null); sauvEtat = ''; afficherListes(vueListes); return; }
+    if (a === 'cle') {
+      const v = (($('#sauvcle') || {}).value || '').trim();
+      if (!v) return;
+      lsSet(SAUV_CLE, v);
+      maj('Connexion…');
+      let j;
+      try { j = await sauvAppel('load'); } catch (e) { lsSet(SAUV_CLE, null); throw e; }
+      if (j.vide) { await sauvegarder(); sauvEtat = 'Connecté : sauvegarde créée ✓'; }
+      else if (confirm(`Une sauvegarde du ${dateFr(j.data && j.data.date)} existe. Remplacer les listes de cet appareil par elle ?`)) { restaurer(j.data); sauvEtat = 'Listes restaurées ✓'; }
+      else sauvEtat = 'Connecté. Rien n’a été remplacé : « Sauvegarder » écrasera la sauvegarde.';
+      afficherListes(vueListes);
+      return;
+    }
+    if (a === 'save') { maj('Sauvegarde…'); const date = await sauvegarder(); maj('Sauvegardé ✓ ' + dateFr(date)); return; }
+    if (a === 'load') {
+      if (!confirm('Remplacer les listes de cet appareil par la sauvegarde ?')) return;
+      maj('Restauration…');
+      const j = await sauvAppel('load');
+      if (j.vide) { maj('Aucune sauvegarde trouvée.'); return; }
+      restaurer(j.data);
+      sauvEtat = 'Listes restaurées ✓';
+      afficherListes(vueListes);
+    }
+  } catch (e) { maj('⚠ ' + e.message); }
+}
 const titreJeu = d => (d.myludo && d.myludo.titre) || (d.bgg && d.bgg.titre) || d.query;
 const memeJeu = (a, b) => a.trim().toLowerCase() === b.trim().toLowerCase();
 const dansListe = (nom, titre) => listes.some(l => l.nom === nom && l.jeux.some(j => memeJeu(j, titre)));
@@ -453,7 +525,7 @@ function listesMenu(d) {
 function listesHtml() {
   return `<h2 class="titre-l">📋 Mes listes</h2>${listes.filter(l => l.nom !== LUDO).map(l => `<section class="aut"><h3>${esc(l.nom)} · ${l.jeux.length}</h3>${l.jeux.length
     ? l.jeux.map(j => `<div class="sim"><button type="button" class="lien" data-q="${esc(j)}">${esc(j)}</button><button type="button" class="x" data-retire="${esc(l.nom)}" data-titre="${esc(j)}" aria-label="Retirer ${esc(j)}" title="Retirer">✕</button></div>`).join('')
-    : '<p class="na">Vide.</p>'}<div class="actl">${l.jeux.length >= 2 ? `<button type="button" class="petit" data-panier="${esc(l.nom)}">🛒 ${l.jeux.length} jeux → matchmaking</button>` : ''}${LISTES_FIXES.includes(l.nom) ? '' : `<button type="button" class="petit" data-suppr="${esc(l.nom)}">Supprimer la liste</button>`}</div></section>`).join('')}<section class="aut"><h3>Nouvelle liste</h3>${champListe}</section>`;
+    : '<p class="na">Vide.</p>'}<div class="actl">${l.jeux.length >= 2 ? `<button type="button" class="petit" data-panier="${esc(l.nom)}">🛒 ${l.jeux.length} jeux → matchmaking</button>` : ''}${LISTES_FIXES.includes(l.nom) ? '' : `<button type="button" class="petit" data-suppr="${esc(l.nom)}">Supprimer la liste</button>`}</div></section>`).join('')}<section class="aut"><h3>Nouvelle liste</h3>${champListe}</section>${sauvHtml()}`;
 }
 const champJeu = '<div class="nvlw"><input class="nvl" maxlength="60" placeholder="Titre du jeu" aria-label="Jeu à ajouter à ma ludothèque"><button type="button" class="petit" data-ajout="1">Ajouter</button></div>';
 function ludoHtml() {
@@ -632,6 +704,8 @@ $('#out').addEventListener('click', e => {
     afficherListes('ludo');
     return;
   }
+  const sv = t('[data-sauv]');
+  if (sv) { sauvAction(sv.dataset.sauv); return; }
   const su = t('[data-suppr]');
   if (su) {
     const i = listes.findIndex(l => l.nom === su.dataset.suppr);

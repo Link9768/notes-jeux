@@ -318,6 +318,58 @@ test('listes : ajout depuis le jeu, gardées dans localStorage, écran « Mes li
   assert.ok(f2.listes.some(l => l.nom === 'Soirées')); // relue au chargement suivant
 });
 
+test('sauvegarde Drive : connexion (sauvegarde vide / existante / clé refusée), restauration, auto-sauvegarde seulement après synchro', async () => {
+  const stock = {}, appels = [], timers = [];
+  let serveur = { ok: true, vide: true }, confirmer = true;
+  const els = {};
+  const elx = sel => (els[sel] = els[sel] || { innerHTML: '', value: '', textContent: '', handlers: {}, addEventListener(t, h) { this.handlers[t] = h; }, querySelectorAll: () => [], scrollIntoView() {}, focus() {} });
+  const ctx = { document: { querySelector: elx }, location: { search: '' }, history: { replaceState() {} }, scrollTo() {}, URLSearchParams,
+    localStorage: { getItem: k => stock[k] ?? null, setItem: (k, v) => { stock[k] = v; }, removeItem: k => { delete stock[k]; } },
+    setTimeout: fn => { timers.push(fn); return timers.length; }, clearTimeout() {}, confirm: () => confirmer,
+    fetch: async (u, o) => { const b = JSON.parse(o.body); appels.push(b); return b.cle === 'refusee' ? { ok: false, status: 403, json: async () => ({ ok: false, erreur: 'clé invalide' }) } : { ok: true, status: 200, json: async () => (b.op === 'load' ? serveur : { ok: true }) }; } };
+  const f = vm.runInNewContext(`${script}; ({ listes, afficherListes, sauvAction, basculer })`, ctx);
+  f.afficherListes();
+  assert.ok(els['#out'].innerHTML.includes('data-sauv="cle"') && !els['#out'].innerHTML.includes('data-sauv="save"'));
+  // pas de clé / pas synchronisé : aucune sauvegarde automatique
+  f.basculer('À acheter', 'Azul');
+  assert.equal(timers.length, 0);
+  // clé refusée : elle n'est pas gardée
+  els['#sauvcle'] = { value: 'refusee' };
+  await f.sauvAction('cle');
+  assert.ok(!stock['notesJeux.cle'] && els['#sauvetat'].textContent.includes('clé invalide'));
+  // clé bonne, rien sur le serveur : les listes de l'appareil sont sauvegardées
+  els['#sauvcle'] = { value: 'bonne-cle' };
+  await f.sauvAction('cle');
+  const sv = appels.filter(a => a.op === 'save').pop();
+  assert.equal(stock['notesJeux.cle'], 'bonne-cle');
+  assert.ok(stock['notesJeux.sync'] && sv.app === 'notes-jeux' && sv.data.listes.find(l => l.nom === 'À acheter').jeux.includes('Azul'));
+  assert.ok(els['#out'].innerHTML.includes('data-sauv="save"') && els['#out'].innerHTML.includes('sauvegarde créée'));
+  // synchronisé : une modification programme la sauvegarde automatique
+  f.basculer('À acheter', 'Clank');
+  assert.equal(timers.length, 1);
+  await timers[0]();
+  assert.ok(appels.filter(a => a.op === 'save').pop().data.listes.find(l => l.nom === 'À acheter').jeux.includes('Clank'));
+  // restauration : remplace les listes, les listes fixes manquantes sont recréées
+  serveur = { ok: true, data: { date: '2026-11-14T10:00:00Z', listes: [{ nom: 'Soirées', jeux: ['Dixit', 42] }] } };
+  await f.sauvAction('load');
+  assert.deepEqual([...f.listes.map(l => l.nom)], ['À essayer', 'À acheter', 'À tester sur BGA', 'Ma ludothèque', 'Soirées']);
+  assert.deepEqual([...f.listes.find(l => l.nom === 'Soirées').jeux], ['Dixit']);
+  assert.ok(JSON.parse(stock['notesJeux.listes']).some(l => l.nom === 'Soirées'));
+  // restauration refusée par l'utilisateur : rien ne change
+  confirmer = false;
+  serveur = { ok: true, data: { listes: [{ nom: 'Autre', jeux: [] }] } };
+  await f.sauvAction('load');
+  assert.ok(!f.listes.some(l => l.nom === 'Autre'));
+  // sauvegarde illisible : message d'erreur, listes intactes
+  confirmer = true;
+  serveur = { ok: true, data: { listes: 'x' } };
+  await f.sauvAction('load');
+  assert.ok(els['#sauvetat'].textContent.includes('illisible') && f.listes.some(l => l.nom === 'Soirées'));
+  // oublier la clé
+  await f.sauvAction('oubli');
+  assert.ok(!stock['notesJeux.cle'] && !stock['notesJeux.sync']);
+});
+
 test('liste collée (un jeu par ligne, puces, numéros, tableur) → titres séparés par des virgules, espaces gardés', () => {
   const f = vm.runInNewContext(`${script}; ({ listeCollee })`, { document: { querySelector: el }, location: { search: '' }, history: {}, fetch: async () => { throw new Error('x'); }, URLSearchParams });
   assert.equal(f.listeCollee('7 Wonders Duel\r\n- Abyss\n\n2. Skull King\tAzul\n'), '7 Wonders Duel, Abyss, Skull King, Azul');
