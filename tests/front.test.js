@@ -463,6 +463,32 @@ test('Découvrir : onglets, Pour toi sans les jeux déjà possédés, voir plus,
   clic(s => (s === '.back' ? {} : null));
   await new Promise(r => setTimeout(r, 10));
   assert.ok(out.innerHTML.includes('🔥 Découvrir') && out.innerHTML.includes('Pour toi'));
+  // « ＋ » : ouvre en onglet sans quitter Découvrir ; dès 2 jeux, bouton matchmaking
+  assert.ok(out.innerHTML.includes('data-ouvrir="Jeu 3"'));
+  const plusJeu = q => { const b = { dataset: { ouvrir: q }, classList: { add() {} }, textContent: '' }; clic(s => (s === '[data-ouvrir]' ? b : null)); return b; };
+  assert.equal(plusJeu('Jeu 3').textContent, '✓ ouvert');
+  plusJeu('Jeu 4');
+  plusJeu('jeu 4'); // doublon ignoré
+  assert.ok(out.innerHTML.includes('🔥 Découvrir'), 'on reste dans Découvrir');
+  await new Promise(r => setTimeout(r, 10));
+  const nav = els['#decOnglets'].innerHTML;
+  // Ipso (ouvert plus haut) + Jeu 3 + Jeu 4
+  assert.ok(nav.includes('data-i="2"') && !nav.includes('data-i="3"'), nav);
+  assert.ok(els['#vers'].innerHTML.includes('🛒 3 jeux → matchmaking'));
+  // clic sur un onglet : le jeu s'affiche, retour à Découvrir possible, même après être passé à l'autre onglet
+  clic(s => (s === '.onglet' ? { dataset: { i: '1' } } : null));
+  await new Promise(r => setTimeout(r, 10));
+  assert.ok(out.innerHTML.includes('Retour à Découvrir'));
+  clic(s => (s === '.onglet' ? { dataset: { i: '0' } } : null));
+  await new Promise(r => setTimeout(r, 10));
+  assert.ok(out.innerHTML.includes('Retour à Découvrir'), 'gardé en changeant d’onglet');
+  clic(s => (s === '.back' ? {} : null));
+  await new Promise(r => setTimeout(r, 10));
+  // ✕ depuis Découvrir : on y reste, l'onglet disparaît
+  clic(s => (s === '[data-x]' ? { dataset: { x: '0' } } : null));
+  await new Promise(r => setTimeout(r, 10));
+  assert.ok(out.innerHTML.includes('🔥 Découvrir') && out.innerHTML.includes('data-ouvrir="Jeu 3"'));
+  assert.ok(els['#vers'].innerHTML.includes('🛒 2 jeux → matchmaking'), 'un onglet de moins');
 });
 
 test('liste collée (un jeu par ligne, puces, numéros, tableur) → titres séparés par des virgules, espaces gardés', () => {

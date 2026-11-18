@@ -104,6 +104,8 @@ button.chip:hover,button.chip.on{background:var(--bgg);color:#fff}
 .dec img,.dec .img0{width:48px;height:48px;object-fit:contain;border-radius:6px;background:var(--line);flex:none}
 .dec-t{flex:1;min-width:0}
 .dec .chip{flex:none;white-space:nowrap;border:0;color:var(--txt);cursor:pointer}
+.dec-b{display:flex;flex-direction:column;align-items:stretch;gap:4px;flex:none}
+.dec-b .chip{text-align:center}
 .ml.toi .body .dec .raison{padding:2px 0 0}
 .actl{display:flex;gap:8px;margin-top:8px}
 .actl:empty{display:none}
@@ -635,10 +637,21 @@ function decLigne(j, avecRaison) {
     j.evolution > 0 && `▲ ${j.evolution}`, j.evolution < 0 && `▼ ${-j.evolution}`].filter(Boolean).map(esc).join(' · ');
   const raison = avecRaison ? [...j.oui.map(x => `✓ ${x}`), ...j.non.map(x => `✗ ${x}`)].join(' · ') + (j.proche ? ` · proche de ${j.proche.titre}` : '') : '';
   const deja = dansListe(LUDO, j.titre) ? ' <span class="mut">📚 à toi</span>' : '';
-  const essai = dansListe('À essayer', j.titre);
+  const essai = dansListe('À essayer', j.titre), ouvert = onglets.some(x => cleDe(x) === cleDe(j.titre));
   return `<div class="dec">${j.image ? `<img src="${esc(j.image)}" alt="" loading="lazy">` : '<span class="img0"></span>'}<div class="dec-t"><button type="button" class="lien" data-q="${esc(j.titre)}">${esc(j.titre)}</button>${deja}`
     + `<div class="mut">${infos}</div>${raison ? `<div class="raison">${esc(raison)}</div>` : `<div class="mut">${esc(j.verdict)}</div>`}</div>`
-    + `<button type="button" class="chip${essai ? ' on' : ''}" data-essai="${esc(j.titre)}" title="Liste « À essayer »">${essai ? '✓' : '+'} À essayer</button></div>`;
+    + `<div class="dec-b"><button type="button" class="chip${essai ? ' on' : ''}" data-essai="${esc(j.titre)}" title="Liste « À essayer »">${essai ? '✓' : '+'} À essayer</button>`
+    + `<button type="button" class="chip${ouvert ? ' on' : ''}" data-ouvrir="${esc(j.titre)}" title="Ouvrir en onglet en haut, sans quitter Découvrir">${ouvert ? '✓ ouvert' : '＋'}</button></div></div>`;
+}
+// « ＋ » : le jeu s'ajoute aux onglets du haut et se charge en arrière-plan ; on reste dans Découvrir.
+function ouvrirEnOnglet(q) {
+  if (onglets.some(x => cleDe(x) === cleDe(q)) || onglets.length >= MAX_ONGLETS) return false;
+  onglets.push(q);
+  majVers();
+  const nav = () => { const n = $('#decOnglets'); if (n && !affiche) n.innerHTML = ongletsHtml(1); };
+  nav();
+  charger(q).then(nav, nav);
+  return true;
 }
 function decouvrirHtml(d) {
   const tabs = `<nav class="onglets">${Object.entries(DEC_ONGLETS).map(([k, v]) => `<span class="onglet-g${k === decOnglet ? ' on' : ''}"><button type="button" class="onglet" data-dec="${k}">${v}</button></span>`).join('')}</nav>`;
@@ -661,7 +674,7 @@ function afficherDecouvrir(onglet) {
   const ici = ++seq;
   affiche = null;
   comparant = false;
-  const peindre = d => { $('#out').innerHTML = `${retour()}${ongletsHtml()}${decouvrirHtml(d)}`; majVers(); };
+  const peindre = d => { $('#out').innerHTML = `${retour()}<div id="decOnglets">${ongletsHtml(1)}</div>${decouvrirHtml(d)}`; majVers(); };
   peindre(null);
   outil({ op: 'decouvrir', onglet }).then(d => { if (seq === ici) peindre(d); },
     e => { if (seq === ici) $('#out').innerHTML = `${retour()}${decouvrirHtml(null).replace(/<div class="skel"><\/div>/g, '')}<p class="na">Découvrir indisponible (${esc(e.message)}). Réessaie dans un instant.</p>`; });
@@ -719,8 +732,8 @@ let onglets = [];
 let actif = -1;
 let comparant = false; // onglet « ⚖ Comparer » affiché
 let affiche = null; // résultat affiché (null pendant un chargement)
-function ongletsHtml() {
-  if (onglets.length < 2) return '';
+function ongletsHtml(min = 2) { // min = 1 dans Découvrir : le 1er jeu ouvert avec « ＋ » apparaît déjà
+  if (onglets.length < min) return '';
   const charges = onglets.filter(q => enCache(q)).length;
   return `<nav class="onglets">${onglets.map((q, i) => {
     const d = enCache(q);
@@ -736,6 +749,8 @@ function afficherComparaison() {
   majVers();
 }
 async function fermer(i) {
+  // ✕ depuis Découvrir : on y reste (l'écran est réaffiché, le « ✓ ouvert » du jeu fermé redevient « ＋ »).
+  if (!affiche && courant && courant.decouvrir) { onglets.splice(i, 1); actif = i === actif ? -1 : actif - (i < actif ? 1 : 0); afficherDecouvrir(decOnglet); return; }
   const etaitActif = i === actif;
   onglets.splice(i, 1);
   if (i < actif) actif--;
@@ -775,7 +790,7 @@ function lancer(q, garder) {
   comparant = false;
   if (garder && courant && pile[pile.length - 1] !== courant) pile.push(courant); else if (!garder) pile.length = 0;
   if (garder) {
-    if (!onglets.length && courant) onglets = [courant.query];
+    if (!onglets.length && courant && !courant.decouvrir) onglets = [courant.query];
     let i = onglets.findIndex(x => cleDe(x) === cleDe(q));
     if (i < 0 && onglets.length < MAX_ONGLETS) i = onglets.push(q) - 1;
     actif = i;
@@ -831,6 +846,8 @@ $('#out').addEventListener('click', e => {
   const dc = t('[data-dec]');
   if (dc) { afficherDecouvrir(dc.dataset.dec); return; }
   if (t('[data-decplus]')) { decVus += 18; afficherDecouvrir(decOnglet); return; }
+  const ov = t('[data-ouvrir]');
+  if (ov) { if (ouvrirEnOnglet(ov.dataset.ouvrir) || onglets.some(x => cleDe(x) === cleDe(ov.dataset.ouvrir))) { ov.classList.add('on'); ov.textContent = '✓ ouvert'; } return; }
   const es = t('[data-essai]');
   if (es) { basculer('À essayer', es.dataset.essai); const on = dansListe('À essayer', es.dataset.essai); es.classList.toggle('on', on); es.textContent = (on ? '✓' : '+') + ' À essayer'; majVers(); return; }
   const sv = t('[data-sauv]');
@@ -847,7 +864,11 @@ $('#out').addEventListener('click', e => {
   if (x) { fermer(Number(x.dataset.x)); return; }
   if (t('[data-comp]')) { afficherComparaison(); return; }
   const o = t('.onglet');
-  if (o) { actif = Number(o.dataset.i); comparant = false; pile.length = 0; search(onglets[actif]); return; }
+  if (o) {
+    // Venu de Découvrir : « ← Retour à Découvrir » reste disponible d'un onglet à l'autre.
+    const dec = (courant && courant.decouvrir ? courant : null) || pile.find(p => p.decouvrir);
+    actif = Number(o.dataset.i); comparant = false; pile.length = 0; if (dec) pile.push(dec); search(onglets[actif]); return;
+  }
   if (t('.back')) { revenir(); return; }
   const ex = t('[data-ext]');
   if (ex) { deplier(ex, $('#extbox'), () => outil({ op: 'ext', id: ex.dataset.ext }).then(r => r.extensions), extensionsHtml); return; }
