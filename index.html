@@ -99,6 +99,12 @@ button.chip:hover,button.chip.on{background:var(--bgg);color:#fff}
 .nvlw{display:flex;gap:6px;margin-top:8px}
 .nvlw input{padding:6px 10px;font-size:14px;flex:0 1 220px}
 .sim .x{border:0;background:transparent;color:var(--mut);padding:0 4px;font-size:13px;cursor:pointer}
+.dec{display:flex;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line)}
+.dec:last-child{border-bottom:0}
+.dec img,.dec .img0{width:48px;height:48px;object-fit:contain;border-radius:6px;background:var(--line);flex:none}
+.dec-t{flex:1;min-width:0}
+.dec .chip{flex:none;white-space:nowrap;border:0;color:var(--txt);cursor:pointer}
+.ml.toi .body .dec .raison{padding:2px 0 0}
 .actl{display:flex;gap:8px;margin-top:8px}
 .actl:empty{display:none}
 .titre-l{font-size:18px;margin:0 0 4px}
@@ -452,7 +458,7 @@ function titresOuverts() {
 function majVers() {
   const v = $('#vers');
   const n = listes.filter(l => l.nom !== LUDO).reduce((s, l) => s + l.jeux.length, 0), nl = listes.find(l => l.nom === LUDO).jeux.length;
-  if (v) v.innerHTML = `<button type="button" class="petit" id="versListes">📋 Mes listes${n ? ` (${n})` : ''}</button><button type="button" class="petit" id="versLudo">📚 Ma ludothèque${nl ? ` (${nl})` : ''}</button>`
+  if (v) v.innerHTML = `<button type="button" class="petit" id="versListes">📋 Mes listes${n ? ` (${n})` : ''}</button><button type="button" class="petit" id="versLudo">📚 Ma ludothèque${nl ? ` (${nl})` : ''}</button><button type="button" class="petit" id="versDec">🔥 Découvrir</button>`
     + (onglets.length >= 2 ? `<button type="button" class="petit" id="versPanier">🛒 ${onglets.length} jeux → matchmaking</button>` : '');
 }
 
@@ -619,6 +625,48 @@ function afficherListes(vue = 'listes') {
   $('#out').innerHTML = `${retour()}${ongletsHtml()}${vue === 'ludo' ? ludoHtml() : listesHtml()}`;
   majVers();
 }
+// 🔥 Découvrir : Tendances / Sorties / Prochainement de MyLudo (jeux de base), triés par le workflow Outils (op=decouvrir,
+// lib/decouvrir.js) selon les mécaniques MyLudo et ton profil ; préchargés toutes les 6 h. « Pour toi » = les 5 meilleurs
+// que tu n'as pas déjà (ludothèque retirée), puis la liste complète, 18 par 18.
+const DEC_ONGLETS = { tendances: 'Tendances', sorties: 'Sorties', prochainement: 'Prochainement' };
+let decOnglet = 'tendances', decVus = 18;
+function decLigne(j, avecRaison) {
+  const infos = [j.date && (j.futur ? `sort le ${j.date}` : j.date), j.duree && `⏱ ${j.duree} min`, j.financement && 'financement participatif',
+    j.evolution > 0 && `▲ ${j.evolution}`, j.evolution < 0 && `▼ ${-j.evolution}`].filter(Boolean).map(esc).join(' · ');
+  const raison = avecRaison ? [...j.oui.map(x => `✓ ${x}`), ...j.non.map(x => `✗ ${x}`)].join(' · ') + (j.proche ? ` · proche de ${j.proche.titre}` : '') : '';
+  const deja = dansListe(LUDO, j.titre) ? ' <span class="mut">📚 à toi</span>' : '';
+  const essai = dansListe('À essayer', j.titre);
+  return `<div class="dec">${j.image ? `<img src="${esc(j.image)}" alt="" loading="lazy">` : '<span class="img0"></span>'}<div class="dec-t"><button type="button" class="lien" data-q="${esc(j.titre)}">${esc(j.titre)}</button>${deja}`
+    + `<div class="mut">${infos}</div>${raison ? `<div class="raison">${esc(raison)}</div>` : `<div class="mut">${esc(j.verdict)}</div>`}</div>`
+    + `<button type="button" class="chip${essai ? ' on' : ''}" data-essai="${esc(j.titre)}" title="Liste « À essayer »">${essai ? '✓' : '+'} À essayer</button></div>`;
+}
+function decouvrirHtml(d) {
+  const tabs = `<nav class="onglets">${Object.entries(DEC_ONGLETS).map(([k, v]) => `<span class="onglet-g${k === decOnglet ? ' on' : ''}"><button type="button" class="onglet" data-dec="${k}">${v}</button></span>`).join('')}</nav>`;
+  if (!d) return `<h2 class="titre-l">🔥 Découvrir</h2>${tabs}<div class="skel"></div><div class="skel"></div><div class="skel"></div>`;
+  const parId = new Map(d.jeux.map(j => [j.id, j]));
+  const toi = (d.pourToi || []).map(id => parId.get(id)).filter(j => j && !dansListe(LUDO, j.titre)).slice(0, 5);
+  const bloc = toi.length
+    ? `<section class="ml toi"><header><b>Pour toi · ${esc(DEC_ONGLETS[decOnglet].toLowerCase())}</b><span class="mut">selon les mécaniques MyLudo</span></header><div class="body">${toi.map(j => decLigne(j, true)).join('')}</div></section>`
+    : '<p class="na">Rien qui colle vraiment à tes goûts dans cette rubrique pour l’instant.</p>';
+  const liste = d.jeux.slice(0, decVus).map(j => decLigne(j, false)).join('');
+  const plus = d.jeux.length > decVus ? `<button type="button" class="petit" data-decplus="1">Voir plus (${d.jeux.length - decVus})</button>` : '';
+  const maj = d.maj ? `<p class="mut">Source MyLudo, jeux de base seulement · mis à jour ${esc(dateFr(d.maj))}</p>` : '';
+  return `<h2 class="titre-l">🔥 Découvrir</h2>${tabs}${bloc}<section class="aut"><h3>${esc(DEC_ONGLETS[decOnglet])} · ${d.jeux.length} jeux</h3>${liste}<div class="actl">${plus}</div></section>${maj}`;
+}
+function afficherDecouvrir(onglet) {
+  if (onglet !== decOnglet) decVus = 18;
+  decOnglet = onglet;
+  if (affiche && courant) pile.push(courant);
+  courant = { decouvrir: onglet, query: 'Découvrir' }; // un jeu ouvert d'ici : « ← Retour à Découvrir » (voir revenir)
+  const ici = ++seq;
+  affiche = null;
+  comparant = false;
+  const peindre = d => { $('#out').innerHTML = `${retour()}${ongletsHtml()}${decouvrirHtml(d)}`; majVers(); };
+  peindre(null);
+  outil({ op: 'decouvrir', onglet }).then(d => { if (seq === ici) peindre(d); },
+    e => { if (seq === ici) $('#out').innerHTML = `${retour()}${decouvrirHtml(null).replace(/<div class="skel"><\/div>/g, '')}<p class="na">Découvrir indisponible (${esc(e.message)}). Réessaie dans un instant.</p>`; });
+}
+
 // Après un ajout / retrait : pastilles du jeu affiché mises à jour sur place (les encarts dépliés restent ouverts).
 function majListeBoutons(nom) {
   const on = dansListe(nom, titreJeu(affiche));
@@ -780,6 +828,11 @@ $('#out').addEventListener('click', e => {
     afficherListes(nom === LUDO ? 'ludo' : 'listes');
     return;
   }
+  const dc = t('[data-dec]');
+  if (dc) { afficherDecouvrir(dc.dataset.dec); return; }
+  if (t('[data-decplus]')) { decVus += 18; afficherDecouvrir(decOnglet); return; }
+  const es = t('[data-essai]');
+  if (es) { basculer('À essayer', es.dataset.essai); const on = dansListe('À essayer', es.dataset.essai); es.classList.toggle('on', on); es.textContent = (on ? '✓' : '+') + ' À essayer'; majVers(); return; }
   const sv = t('[data-sauv]');
   if (sv) { sauvAction(sv.dataset.sauv); return; }
   const su = t('[data-suppr]');
@@ -822,6 +875,7 @@ $('#vers').addEventListener('click', e => {
   if (t('#versPanier')) versPanier(titresOuverts());
   else if (t('#versListes')) { afficherListes(); scrollTo(0, 0); }
   else if (t('#versLudo')) { afficherListes('ludo'); scrollTo(0, 0); }
+  else if (t('#versDec')) { afficherDecouvrir(decOnglet); scrollTo(0, 0); }
 });
 
 // Liste collée (un jeu par ligne, ou cellules d'un tableur) : chaque retour à la ligne / tabulation devient une virgule,
@@ -877,6 +931,7 @@ $('#cam').addEventListener('change', async () => {
 async function revenir() {
   const prev = pile.pop();
   if (!prev) return;
+  if (prev.decouvrir) { affiche = null; afficherDecouvrir(prev.decouvrir); scrollTo(0, 0); return; }
   seq++; // annule une recherche encore en cours
   comparant = false;
   courant = prev;

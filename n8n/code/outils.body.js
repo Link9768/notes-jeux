@@ -1,4 +1,5 @@
 // Webhook GET ?op=ext|meca|jumeaux&id=<id BGG> | op=suggest&q=<texte> | op=ean&code=<chiffres> | op=videos&q=<titre>&q2=<autre titre>
+//   | op=decouvrir&onglet=tendances|sorties|prochainement
 const p = $('Webhook').first().json.query || {};
 const op = String(p.op || '');
 const id = String(p.id || '').replace(/\D/g, '').slice(0, 10);
@@ -40,16 +41,55 @@ async function jumeaux() {
   return scoreJumeaux(cible, listes, finalistes, fiches);
 }
 
-// Saisie semi-automatique : titres MyLudo (français), jeton CSRF + cookie comme dans le node Sources.
-async function suggest(q) {
-  if (q.length < 3) return [];
+// API interne MyLudo : jeton CSRF + cookie de la page d'accueil, comme dans le node Sources.
+async function myludoApi() {
   const home = await req('https://www.myludo.fr/', { ...UA, 'Accept': 'text/html' });
   const token = (String(home.body).match(/name="csrf-token" content="([^"]+)"/) || [])[1];
   if (!token) throw new Error('jeton CSRF introuvable');
   const cookie = [].concat((home.headers || {})['set-cookie'] || []).map(c => c.split(';')[0]).join('; ');
-  const r = await req('https://www.myludo.fr/views/search/datas.php?type=search&tab=games&page=1&order=bymagic&words=' + encodeURIComponent(q),
-    { ...UA, 'X-Requested-With': 'XMLHttpRequest', 'X-Csrf-Token': token, 'Cookie': cookie });
-  return classerSuggestions(q, parseMyludoSearch(typeof r.body === 'string' ? JSON.parse(r.body) : r.body));
+  const h = { ...UA, 'X-Requested-With': 'XMLHttpRequest', 'X-Csrf-Token': token, 'Cookie': cookie };
+  return async path => { const b = (await req('https://www.myludo.fr/views/' + path, h)).body; return typeof b === 'string' ? JSON.parse(b) : b; };
+}
+
+// Saisie semi-automatique : titres MyLudo (français).
+async function suggest(q) {
+  if (q.length < 3) return [];
+  const ml = await myludoApi();
+  return classerSuggestions(q, parseMyludoSearch(await ml('search/datas.php?type=search&tab=games&page=1&order=bymagic&words=' + encodeURIComponent(q))));
+}
+
+// Découvrir : Tendances / Sorties / Prochainement de MyLudo (jeux de base), mécaniques MyLudo de chaque jeu (fiche info,
+// 6 à la fois, gardées 7 jours dans la mémoire du workflow, persistée en production seulement), tri « Pour toi » (lib/decouvrir.js).
+const ONGLETS = { tendances: ['trending', 100], sorties: ['news', 60], prochainement: ['upcoming', 100] };
+async function decouvrir(onglet) {
+  const [type, limit] = ONGLETS[onglet];
+  const ml = await myludoApi();
+  const jeux = parseDecouvrir(await ml(`games/datas.php?type=${type}&filter=basegame&limit=${limit}&page=1`));
+  const memo = $getWorkflowStaticData('global');
+  const cache = memo.mlMeca = memo.mlMeca || {};
+  const now = Date.now();
+  for (const k of Object.keys(cache)) if (now - cache[k].t > 7 * 864e5) delete cache[k];
+  const manque = jeux.filter(j => !cache[j.id]);
+  // Une fiche que MyLudo n'a pas calculée récemment met 0,5 à plus de 10 s la 1re fois (40 ms ensuite, vérifié le 2026-11-18) :
+  // 6 à la fois pour ne pas le surcharger ; une fiche en échec est relue au préchargement suivant.
+  const lus = await parallele(manque.map(j => async () => mecaniquesMl(await ml('game/datas.php?type=info&id=' + encodeURIComponent(j.id)))));
+  manque.forEach((j, i) => { if (lus[i] && lus[i].length) cache[j.id] = { t: now, m: lus[i] }; }); // sans mécanique : relu la prochaine fois
+  const out = jeux.map((j, i) => {
+    const m = cache[j.id] ? cache[j.id].m : (lus[manque.indexOf(j)] || null);
+    return { ...j, mecaniques: m, ...scoreDecouvrir(j, m) };
+  });
+  return { onglet, jeux: out, pourToi: pourToiDecouvrir(out, 20) }; // la page retire les jeux de la ludothèque et en garde 5
+}
+// Résultat gardé 12 h ; le workflow « Notes Jeux — Découvrir (préchargement) » le recalcule toutes les 6 h (maj=1),
+// pour que la page n'attende jamais les fiches MyLudo lentes.
+async function decouvrirEnCache(onglet, forcer) {
+  const memo = $getWorkflowStaticData('global');
+  const prets = memo.decouvrir = memo.decouvrir || {};
+  const c = prets[onglet];
+  if (!forcer && c && Date.now() - c.t < 12 * 36e5) return { ...c.data, maj: new Date(c.t).toISOString() };
+  const data = await decouvrir(onglet);
+  prets[onglet] = { t: Date.now(), data };
+  return { ...data, maj: new Date().toISOString() };
 }
 
 // Code-barres → titre : recherche Philibert par EAN, sinon Esprit Jeu (page en ISO-8859-1).
@@ -88,6 +128,7 @@ try {
   if (op === 'videos' && titres.length) return [{ json: { op, ...(await videos(titres)) } }];
   if (op === 'suggest') return [{ json: { op, titres: await suggest(String(p.q || '').trim().slice(0, 60)) } }];
   if (op === 'ean' && estEan(p.code)) return [{ json: { op, titre: await ean(String(p.code).trim()) } }];
+  if (op === 'decouvrir' && ONGLETS[p.onglet]) return [{ json: { op, ...(await decouvrirEnCache(p.onglet, p.maj === '1')) } }];
   return [{ json: { op, erreur: 'paramètres invalides' } }];
 } catch (e) {
   return [{ json: { op, erreur: (e && e.message) || String(e) } }];

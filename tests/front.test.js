@@ -426,6 +426,45 @@ test('encart « Pour toi » : mécaniques favorites, durée, poids, duel, verdic
   assert.equal(f.pourToi({ query: 'x', bgg: null }), '');
 });
 
+test('Découvrir : onglets, Pour toi sans les jeux déjà possédés, voir plus, À essayer, retour depuis un jeu', async () => {
+  const stock = {}, els = {}, appels = [];
+  const elx = sel => (els[sel] = els[sel] || { innerHTML: '', value: '', handlers: {}, addEventListener(t, h) { this.handlers[t] = h; }, querySelectorAll: () => [], scrollIntoView() {}, focus() {} });
+  const jeu = (id, titre, verdict, score) => ({ id, titre, verdict, score, oui: score ? ['combos et draft', 'partie courte'] : [], non: [], proche: id === 'a' ? { titre: 'Faraway' } : null,
+    date: '20 nov 2026', futur: true, duree: '30', image: null, evolution: 2 });
+  const jeux = [jeu('a', 'Ipso', 'Très ton style', 8), jeu('b', 'Flip 7', 'Très ton style', 8), ...Array.from({ length: 25 }, (_, i) => jeu('z' + i, 'Jeu ' + i, 'Peu de points communs', 0))];
+  const ctx = { document: { querySelector: elx }, location: { search: '' }, history: { replaceState() {} }, scrollTo() {}, URLSearchParams,
+    localStorage: { getItem: k => stock[k] ?? null, setItem: (k, v) => { stock[k] = v; } },
+    fetch: async u => { appels.push(String(u));
+      if (String(u).includes('op=decouvrir')) return { ok: true, json: async () => ({ op: 'decouvrir', onglet: 'tendances', jeux, pourToi: ['b', 'a'], maj: '2026-11-18T19:00:00Z' }) };
+      if (String(u).includes('notes-jeux?q=')) return { ok: true, json: async () => ({ query: 'ipso', myludo: { titre: 'Ipso' }, liens: { bgg: '#' }, okkazeo: null }) };
+      return { ok: false }; } };
+  const f = vm.runInNewContext(`${script}; ({ afficherDecouvrir, listes })`, ctx);
+  assert.ok(els['#vers'].innerHTML.includes('🔥 Découvrir'));
+  els['#vers'].handlers.click({ target: { closest: s => (s === '#versDec' ? {} : null) } });
+  const out = els['#out'];
+  assert.ok(out.innerHTML.includes('data-dec="prochainement"') && out.innerHTML.includes('skel'), 'onglets + chargement');
+  await new Promise(r => setTimeout(r, 10));
+  const h = out.innerHTML;
+  const toi = h.slice(h.indexOf('ml toi'), h.indexOf('class="aut"'));
+  assert.ok(toi.includes('Ipso') && toi.includes('proche de Faraway') && toi.includes('✓ combos et draft'), 'Pour toi');
+  assert.ok(!toi.includes('Flip 7'), 'Flip 7 est dans la ludothèque : retiré du Pour toi');
+  assert.ok(h.includes('sort le 20 nov 2026') && h.includes('▲ 2') && h.includes('Voir plus (9)'), h.slice(0, 200));
+  const clic = cible => out.handlers.click({ target: { closest: s => cible(s) } });
+  clic(s => (s === '[data-decplus]' ? {} : null));
+  await new Promise(r => setTimeout(r, 10));
+  assert.ok(!out.innerHTML.includes('Voir plus') && out.innerHTML.includes('Jeu 24'));
+  assert.equal(appels.filter(u => u.includes('op=decouvrir')).length, 1, 'réponse gardée le temps de la page');
+  const bouton = { dataset: { essai: 'Ipso' }, classList: { toggle() {} }, textContent: '' };
+  clic(s => (s === '[data-essai]' ? bouton : null));
+  assert.ok(f.listes.find(l => l.nom === 'À essayer').jeux.includes('Ipso') && bouton.textContent === '✓ À essayer');
+  clic(s => (s === '[data-q]' ? { dataset: { q: 'Ipso' } } : null));
+  await new Promise(r => setTimeout(r, 10));
+  assert.ok(out.innerHTML.includes('Retour à Découvrir'), 'retour vers Découvrir depuis le jeu');
+  clic(s => (s === '.back' ? {} : null));
+  await new Promise(r => setTimeout(r, 10));
+  assert.ok(out.innerHTML.includes('🔥 Découvrir') && out.innerHTML.includes('Pour toi'));
+});
+
 test('liste collée (un jeu par ligne, puces, numéros, tableur) → titres séparés par des virgules, espaces gardés', () => {
   const f = vm.runInNewContext(`${script}; ({ listeCollee })`, { document: { querySelector: el }, location: { search: '' }, history: {}, fetch: async () => { throw new Error('x'); }, URLSearchParams });
   assert.equal(f.listeCollee('7 Wonders Duel\r\n- Abyss\n\n2. Skull King\tAzul\n'), '7 Wonders Duel, Abyss, Skull King, Azul');

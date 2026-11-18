@@ -46,3 +46,8 @@
 - Fiche d'un jeu (`type=game`) : `collected` (nombre de collections), `wishes`, `plays`. Latence ≈ 1 s si non mise en cache, requêtes traitées l'une après l'autre.
 - BGA : `https://boardgamearena.com/gamelist?section=all` (redirige vers `en.boardgamearena.com`, 1,9 Mo) embarque `game_list` : `name` (slug), `display_name_en`, `status` (public/beta), `aliases`, `bgg_id`. Partie : `https://boardgamearena.com/gamepanel?game=<name>`.
 - Okkazeo : la fiche d'un jeu contient `<a href="https://boardgamegeek.com/boardgame/<id>/<slug>">BoardGameGeek</a>` (Clank! → 201808).
+
+## MyLudo — Découvrir : tendances, sorties, à venir (vérifié le 2026-11-18)
+- Pages du site `#!/games/trending`, `#!/games/news`, `#!/games/upcoming` = `GET /views/games/datas.php?type=<trending|news|upcoming>&page=<n>&filter=basegame&limit=<n>&order=<…>` (lu dans `scripts.combined.js`). Tri par défaut : `byrank` (tendances), `bydate` (sorties : plus récentes d'abord ; à venir : plus proches d'abord). 18 par page, `limit` jusqu'à 100 testé.
+- Réponse `{ meta, count, list }` ; jeu : `id, code, title, subtitle, edition, type (basegame|extension|goodie), image {S80,S160,S300}, crowdfunding (false|"ulule"…), release {date, dateshort, futur}, time_min, time_max` (+ `trend`, `tendance` en tendances).
+- Fiche `type=info` : lente à froid (0,5 à > 10 s), 40 ms ensuite.
