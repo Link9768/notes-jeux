@@ -85,7 +85,7 @@ Plusieurs jeux dans la barre (« Abyss, Clank, Azul », virgule ou point-virgule
 
 - **Mes listes** : « À essayer », « À acheter », « À tester sur BGA » (fixes) + listes créées. `localStorage` clé `notesJeux.listes` = **propres à l'appareil/navigateur** (pas de synchro). « ＋ Liste » sous le titre du jeu (pastilles = ajout/retrait, titre stocké = titre MyLudo), « + » à côté de « BGA ✓ » → « À tester sur BGA ». Écran `📋 Mes listes` (bouton sous la recherche) : jeux cliquables (= 🔍), ✕, 🛒 → matchmaking, suppression des listes créées.
 - **Extensions** : le titre d'une extension ouvre sa page de jeu dans l'appli (recherche par titre BGG anglais, vérifié : « Abyss: Kraken » trouvé par BGG, MyLudo, Philibert, Esprit Jeu).
-- **Liens externes dans le même onglet** (plus de `target="_blank"`, qui déclenchait « pop-up bloqué » sur mobile), **sauf les vidéos YouTube** (nouvel onglet, voulu).
+- **Liens externes dans le même onglet** (plus de `target="_blank"`, qui déclenchait « pop-up bloqué » sur mobile), **sauf les vidéos YouTube et, depuis le 2026-11-20, tous les liens Okkazeo** (`extNouv` : encart Okkazeo, jeux et annonces du matchmaking) : fenêtre indépendante, pour ne pas perdre la page de l'appli en revenant (demandé par l'utilisateur).
 
 ## Duo et Jumeaux préchargés (2026-11-07)
 
@@ -187,3 +187,7 @@ Liste fixe `Ma ludothèque` (même mécanique que « À essayer » : `LISTES_FIX
 ## Icône 🛒 « toutes mes listes → matchmaking » (2026-11-20)
 
 Petite icône `🛒` (id `versToutes`, visible dès 2 jeux, infobulle « Envoyer les N jeux de toutes mes listes au matchmaking ») juste à côté de « 📋 Mes listes » (`majVers`). `jeuxDesListes()` réunit **absolument tous** les jeux de toutes les listes, **ludothèque comprise** (demandé par l'utilisateur), sans doublon d'une liste à l'autre (casse et espaces ignorés), et `versPanier` les met dans la case du matchmaking (100 jeux pris en compte au plus). Les boutons `🛒 N jeux → matchmaking` de chaque liste dans l'écran Mes listes sont conservés.
+
+## Matchmaking : jeux classés par nombre d'annonces (2026-11-20)
+
+`panierHtml` classe la liste des jeux (puces « Jeu · N annonces ») du plus d'annonces au moins (à égalité : ordre de la liste), les jeux « introuvable sur Okkazeo » en dernier. Les vendeurs gardent leur tri (nombre de jeux, près de Paris, total).

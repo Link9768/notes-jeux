@@ -284,8 +284,8 @@ test('extension : son titre ouvre sa page de jeu dans l’appli (data-q), pas Bo
   const h = front3.extensionsHtml([{ titre: 'Abyss: Kraken', annee: 2015, url: 'https://boardgamegeek.com/boardgame/1', note: 7.4 }]);
   assert.ok(h.includes('class="lien" data-q="Abyss: Kraken"') && !h.includes('href='), h);
 });
-test('liens externes dans le même onglet (pas de pop-up) ; pastille BGA suivie du + « À tester sur BGA »', () => {
-  assert.ok(!front3.okk(okkazeo([]), '#').includes('_blank'));
+test('liens Okkazeo en fenêtre indépendante (demandé), autres liens dans le même onglet ; pastille BGA suivie du + « À tester sur BGA »', () => {
+  assert.ok(front3.okk(okkazeo([]), '#').includes('target="_blank" rel="noopener"'), 'Okkazeo : nouvelle fenêtre');
   const h = front3.bgaBadge(lien(), games);
   assert.ok(!h.includes('_blank') && h.includes('class="bga plus"') && h.includes('data-liste="À tester sur BGA"'));
   assert.ok(!front3.bgaBadge(lien({ query: 'clank', myludo: { titre: 'Clank!' } }), games).includes('plus'));
@@ -670,4 +670,16 @@ test('icône 🛒 à côté de Mes listes : tous les jeux de toutes les listes (
   const f2 = vm.runInNewContext(`${script}; ({ majVers })`, { ...ctx, document: { querySelector: elx } });
   f2.majVers();
   assert.ok(els['#vers'].innerHTML.includes('Envoyer les 39 jeux de toutes mes listes'), els['#vers'].innerHTML.slice(0, 300));
+});
+
+test('matchmaking : jeux classés du plus d’annonces au moins, introuvables en dernier ; liens Okkazeo en fenêtre indépendante', () => {
+  const j = (titre, annonces) => ({ demande: titre || 'inconnu', titre, url: titre ? 'https://www.okkazeo.com/jeux/' + annonces + '/x' : null, annonces });
+  const h = front.panierHtml({ jeux: [j('Azul', 3), j(null, 0), j('Clank', 14), j('Dixit', 3), j('Catan', 22)], vendeurs: [{ vendeur: 'a', nbJeux: 2, total: 10, annonces: [{ jeu: 'Azul', prix: 5, etat: 'bon', url: 'https://www.okkazeo.com/annonces/1/a' }] }], erreurs: [] });
+  const ordre = ['Catan', 'Clank', 'Azul', 'Dixit', 'inconnu'].map(x => h.indexOf(x));
+  assert.deepEqual([...ordre].sort((a, b) => a - b), ordre, 'ordre : 22, 14, 3 (Azul avant Dixit, ordre de la liste), introuvable');
+  assert.ok(h.includes('<a href="https://www.okkazeo.com/jeux/22/x" target="_blank" rel="noopener">Catan</a> · 22 annonces'));
+  assert.ok(h.includes('<a href="https://www.okkazeo.com/annonces/1/a" target="_blank" rel="noopener">annonce ↗</a>'));
+  const o = front.okk({ total: 5, min: 10, max: 30, url: 'https://www.okkazeo.com/jeux/9/clank', annonces: [] }, '#');
+  assert.ok(o.includes('<a href="https://www.okkazeo.com/jeux/9/clank" target="_blank" rel="noopener">'), 'encart Okkazeo');
+  assert.ok(front.okk(null, 'https://www.okkazeo.com/jeux/resultats?rech_nom=x').includes('target="_blank"'));
 });

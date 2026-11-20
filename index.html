@@ -170,6 +170,8 @@ const fmtDate = iso => {
 };
 // Liens externes ouverts dans le même onglet (target="_blank" déclenchait « pop-up bloqué » sur mobile) ; le retour du navigateur ramène ici.
 const ext = (url, txt) => `<a href="${esc(url)}" rel="noopener">${txt}</a>`;
+// Annonces d'occasion (Okkazeo) : fenêtre indépendante, pour ne pas perdre la page de l'appli en revenant (demandé par l'utilisateur).
+const extNouv = (url, txt) => `<a href="${esc(url)}" target="_blank" rel="noopener">${txt}</a>`;
 let seq = 0;
 
 function tile(name, color, d, scale, unit, searchUrl) {
@@ -406,11 +408,11 @@ function dealTag(prix, neuf) {
   return `<span class="deal ${cls}" title="vs ${fr(neuf)} € neuf">${e > 0 ? '+' : e < 0 ? '−' : ''}${Math.abs(e)} %</span>`;
 }
 function okk(o, lien, neuf = null) {
-  if (!o) return `<section class="okk"><header><b>Okkazeo</b><div>indisponible</div></header><footer>${ext(lien, 'Chercher sur Okkazeo ↗')}</footer></section>`;
+  if (!o) return `<section class="okk"><header><b>Okkazeo</b><div>indisponible</div></header><footer>${extNouv(lien, 'Chercher sur Okkazeo ↗')}</footer></section>`;
   const rows = o.annonces.map(a => `<div class="ann"><b>${fr(a.prix)} €${dealTag(a.prix, neuf)}</b><span>${esc(a.etat)}${a.bonneAffaire ? '<span class="tag ok">bonne affaire</span>' : ''}${a.extensions ? '<span class="tag">+ ext.</span>' : ''}<br><span class="mut">${esc(a.ville ?? '')}</span></span><span class="mut">${fmtDate(a.date)}</span></div>`).join('');
   const prix = (o.total && o.min != null ? ` · ${fr(o.min)}–${fr(o.max)} €` : '') + (neuf != null ? ` · neuf dès ${fr(neuf)} €` : '');
   const pied = o.annonces.length ? 'Ouvrir sur Okkazeo ↗' : o.total ? `Voir les ${o.total} annonces France ↗` : 'Ouvrir sur Okkazeo ↗';
-  return `<section class="okk"><header><b>Okkazeo · ${o.annonces.length} près de Paris</b><div>${o.total} en France${prix}</div></header>${rows}<footer>${ext(o.url, pied)}</footer></section>`;
+  return `<section class="okk"><header><b>Okkazeo · ${o.annonces.length} près de Paris</b><div>${o.total} en France${prix}</div></header>${rows}<footer>${extNouv(o.url, pied)}</footer></section>`;
 }
 
 function render(d, games) {
@@ -1012,11 +1014,12 @@ async function revenir() {
 // Matchmaking Okkazeo (workflow « Notes Jeux — Panier ») : vendeurs qui proposent au moins 2 des jeux de la liste.
 const API_PANIER = 'https://n8n.srv1250642.hstgr.cloud/webhook/notes-jeux-panier';
 function panierHtml(p) {
-  const jeux = (p.jeux || []).map(j => (j.titre
-    ? `<span class="chip">${ext(j.url, esc(j.titre))} · ${j.annonces} annonce${j.annonces > 1 ? 's' : ''}</span>`
+  // Jeux classés par nombre d'annonces, le plus d'annonces d'abord (à égalité : ordre de la liste) ; les introuvables en dernier.
+  const jeux = (p.jeux || []).map((j, i) => ({ j, i })).sort((a, b) => (b.j.titre ? b.j.annonces || 0 : -1) - (a.j.titre ? a.j.annonces || 0 : -1) || a.i - b.i).map(({ j }) => j).map(j => (j.titre
+    ? `<span class="chip">${extNouv(j.url, esc(j.titre))} · ${j.annonces} annonce${j.annonces > 1 ? 's' : ''}</span>`
     : `<span class="chip th">${esc(j.demande)} : introuvable sur Okkazeo</span>`)).join('');
   const vendeurs = (p.vendeurs || []).length
-    ? p.vendeurs.map(v => `<div class="vend"><div class="top"><b>${esc(v.vendeur)}</b><span class="mut">${esc(v.ville ?? '')}${v.cp ? ` (${esc(v.cp)})` : ''}</span>${v.procheParis ? '<span class="tag ok">près de Paris</span>' : ''}${v.envoi ? '<span class="tag">envoi</span>' : ''}<span class="right"><b>${v.nbJeux} jeux</b> · ${fr(v.total)} €</span></div>${v.annonces.map(a => `<div class="ann2"><span>${esc(a.jeu)} <span class="mut">${esc(a.etat ?? '')}</span></span><span>${fr(a.prix)} € ${a.url ? ext(a.url, 'annonce ↗') : ''}</span></div>`).join('')}</div>`).join('')
+    ? p.vendeurs.map(v => `<div class="vend"><div class="top"><b>${esc(v.vendeur)}</b><span class="mut">${esc(v.ville ?? '')}${v.cp ? ` (${esc(v.cp)})` : ''}</span>${v.procheParis ? '<span class="tag ok">près de Paris</span>' : ''}${v.envoi ? '<span class="tag">envoi</span>' : ''}<span class="right"><b>${v.nbJeux} jeux</b> · ${fr(v.total)} €</span></div>${v.annonces.map(a => `<div class="ann2"><span>${esc(a.jeu)} <span class="mut">${esc(a.etat ?? '')}</span></span><span>${fr(a.prix)} € ${a.url ? extNouv(a.url, 'annonce ↗') : ''}</span></div>`).join('')}</div>`).join('')
     : '<p class="na">Aucun vendeur ne propose au moins 2 de ces jeux.</p>';
   const err = (p.erreurs || []).length ? `<p class="mut">Problème : ${esc(p.erreurs.join(' · '))}</p>` : '';
   return `<div class="chips">${jeux}</div>${vendeurs}${err}`;
