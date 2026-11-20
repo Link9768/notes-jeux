@@ -470,10 +470,16 @@ function comparerHtml(liste) {
 function titresOuverts() {
   return onglets.map(q => { const d = enCache(q); return (d && d.myludo && d.myludo.titre) || q; });
 }
+// Tous les jeux de « Mes listes » (la ludothèque est à part : ces jeux, on les a déjà), sans doublon d'une liste à l'autre.
+function jeuxDesListes() {
+  const vus = new Set(), out = [];
+  for (const l of listes) if (l.nom !== LUDO) for (const j of l.jeux) if (!vus.has(j.trim().toLowerCase()) && vus.add(j.trim().toLowerCase())) out.push(j);
+  return out;
+}
 function majVers() {
   const v = $('#vers');
-  const n = listes.filter(l => l.nom !== LUDO).reduce((s, l) => s + l.jeux.length, 0), nl = listes.find(l => l.nom === LUDO).jeux.length;
-  if (v) v.innerHTML = `<button type="button" class="petit" id="versListes">📋 Mes listes${n ? ` (${n})` : ''}</button><button type="button" class="petit" id="versLudo">📚 Ma ludothèque${nl ? ` (${nl})` : ''}</button><button type="button" class="petit" id="versDec">🔥 Découvrir</button>`
+  const n = listes.filter(l => l.nom !== LUDO).reduce((s, l) => s + l.jeux.length, 0), nl = listes.find(l => l.nom === LUDO).jeux.length, nj = jeuxDesListes().length;
+  if (v) v.innerHTML = `<button type="button" class="petit" id="versListes">📋 Mes listes${n ? ` (${n})` : ''}</button>${nj >= 2 ? `<button type="button" class="petit" id="versToutes" title="Envoie tous les jeux de Mes listes (sans la ludothèque) dans la case du matchmaking">🛒 Listes → matchmaking (${nj})</button>` : ''}<button type="button" class="petit" id="versLudo">📚 Ma ludothèque${nl ? ` (${nl})` : ''}</button><button type="button" class="petit" id="versDec">🔥 Découvrir</button>`
     + (onglets.length >= 2 ? `<button type="button" class="petit" id="versPanier">🛒 ${onglets.length} jeux → matchmaking</button>` : '');
 }
 
@@ -933,6 +939,7 @@ $('#out').addEventListener('click', e => {
 $('#vers').addEventListener('click', e => {
   const t = s => e.target.closest && e.target.closest(s);
   if (t('#versPanier')) versPanier(titresOuverts());
+  else if (t('#versToutes')) versPanier(jeuxDesListes());
   else if (t('#versListes')) { afficherListes(); scrollTo(0, 0); }
   else if (t('#versLudo')) { afficherListes('ludo'); scrollTo(0, 0); }
   else if (t('#versDec')) { afficherDecouvrir(decOnglet); scrollTo(0, 0); }
