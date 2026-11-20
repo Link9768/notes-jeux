@@ -47,8 +47,8 @@ test('info : Abyss → Enchères, Gestion de main, Stop ou encore…', () => {
   for (const n of ['Enchères', 'Gestion de main', 'Stop ou encore']) assert.ok(noms.includes(n), n);
 });
 test('info vide ou absente → listes vides, pas de crash', () => {
-  assert.deepEqual(parseMyludoInfo({}), { mecaniques: [], themes: [], auteurs: [] });
-  assert.deepEqual(parseMyludoInfo(null), { mecaniques: [], themes: [], auteurs: [] });
+  assert.deepEqual(parseMyludoInfo({}), { mecaniques: [], themes: [], auteurs: [], editeurs: [] });
+  assert.deepEqual(parseMyludoInfo(null), { mecaniques: [], themes: [], auteurs: [], editeurs: [] });
 });
 const clankTags = () => {
   const tags = fx('myludo-tags-clank.json');
@@ -107,4 +107,9 @@ test('homonymes : jeux de base au titre identique, année, choix par id', () => 
   assert.equal(pickMyludo('Loop', c, '2').id, '2', 'choix par id');
   assert.equal(pickMyludo('Loop', c, '999').id, '1', 'id inconnu : choix normal');
   assert.equal(homonymesMyludo(pickMyludo('Tales From The Loop', c), c), null, 'un seul jeu : pas de ligne');
+});
+
+test('éditeurs MyLudo : rôle « Éditeur » de la fiche info (plusieurs possibles)', () => {
+  assert.deepEqual(parseMyludoInfo(fx('myludo-info-clank.json')).editeurs, ['Dire Wolf', 'Renegade Game Studios']);
+  assert.deepEqual(parseMyludoInfo(fx('myludo-info-abyss.json')).editeurs, ['Bombyx'], 'distributeur et auteurs écartés');
 });

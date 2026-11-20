@@ -1,6 +1,8 @@
 const q = String($('Webhook').first().json.query.q || '').trim().slice(0, 100);
 const enc = encodeURIComponent(q);
 const mlChoisi = String($('Webhook').first().json.query.ml || '').replace(/[^0-9]/g, '').slice(0, 10); // homonyme choisi sur la page (id MyLudo)
+// Éditeur tapé après le nom (« Loop Yellow ») ou celui du jeu choisi dans la ligne des homonymes (« A|B ») : départage les jeux au même titre.
+const ed = String($('Webhook').first().json.query.ed || '').trim().slice(0, 100);
 const liens = {
   espritjeu: 'https://www.espritjeu.com/dhtml/resultat_recherche.php?keywords=' + enc,
   philibert: 'https://www.philibertnet.com/fr/recherche?search_query=' + enc,
@@ -32,13 +34,26 @@ const get = async (url, headers = UA, charset) => {
   return charset ? Buffer.from(r.body).toString(charset) : String(r.body ?? '');
 };
 
-async function boutique(searchUrl, parseSearch, charset) {
-  const p = pickProduct(q, parseSearch(await get(searchUrl, UA, charset)));
+// parEd (facultatif) : choisit, parmi les candidats au même titre, celui de l'éditeur demandé ; sinon on garde le choix habituel.
+async function boutique(searchUrl, parseSearch, charset, parEd) {
+  const cands = parseSearch(await get(searchUrl, UA, charset));
+  let p = pickProduct(q, cands);
   if (!p) return null;
+  if (ed && parEd) p = (await parEd(cands, p)) || p;
   const prod = findProduct(extractJsonLd(await get(p.url, UA, charset)));
   const r = ratingOf(prod);
   return { note: r ? r.note : (p.note ?? null), avis: r ? r.avis : null, titre: p.title, url: p.url, prix: priceOf(prod) };
 }
+
+// Philibert : la marque est dans l'URL produit (aucune requête de plus). Esprit Jeu : marque lue sur la page produit (3 candidats au plus).
+const parEdPhilibert = async (cands, p) => parEditeur(cands, p, ed, c => (marquePhilibert(c.url) || '').replace(/-/g, ' '));
+const parEdEspritJeu = async (cands, p) => {
+  const exacts = cands.filter(c => normalize(c.title) === normalize(p.title)).slice(0, 3);
+  if (exacts.length < 2) return null;
+  const marques = await Promise.all(exacts.map(c => get(c.url, UA, 'latin1').then(marqueEspritJeu).catch(() => null)));
+  const i = marques.findIndex(m => m && memeEditeur(ed, m));
+  return i >= 0 ? exacts[i] : null;
+};
 
 // Okkazeo sépare un même jeu en plusieurs éditions (même titre, ids différents) : on additionne celles qui ont des annonces.
 async function okkazeo() {
@@ -88,10 +103,19 @@ async function myludo() {
     return typeof r.body === 'string' ? JSON.parse(r.body) : r.body;
   };
   const candidats = parseMyludoSearch(await call('search/datas.php?type=search&tab=games&page=1&order=bymagic&words=' + enc));
-  const p = pickMyludo(q, candidats, mlChoisi);
+  let p = pickMyludo(q, candidats, mlChoisi);
   if (!p) return null;
-  const homonymes = homonymesMyludo(p, candidats); // jeux de base au même titre (année) : la page propose de choisir
-  const idAnnee = { id: p.id, homonymes };
+  // Jeux de base au même titre (année) : la page propose de choisir ; on lit leur éditeur (6 plus récents, en parallèle).
+  let homonymes = homonymesMyludo(p, candidats), editeurOk = false;
+  if (homonymes) {
+    const lus = await Promise.all(homonymes.slice(0, 6).map(h => call('game/datas.php?type=info&id=' + encodeURIComponent(h.id)).then(i => parseMyludoInfo(i).editeurs).catch(() => [])));
+    homonymes = homonymes.map((h, i) => ({ ...h, editeurs: lus[i] || [] }));
+    // Éditeur tapé : le jeu de cet éditeur remplace le choix automatique (sauf choix explicite dans la ligne).
+    const voulu = !mlChoisi && ed ? homonymes.find(h => h.editeurs.some(e => memeEditeur(ed, e))) : null;
+    editeurOk = !!voulu;
+    if (voulu && voulu.id !== p.id) p = candidats.find(c => c.id === voulu.id) || p;
+  }
+  const idAnnee = { id: p.id, homonymes, ...(editeurOk ? { editeurOk: true } : {}) };
   const fiche = parseMyludoGame(await call('game/datas.php?type=game&id=' + encodeURIComponent(p.id)));
   // Mécaniques et jeux du même auteur : facultatifs. Une panne met ces champs à null sans effacer la note.
   try {
@@ -147,8 +171,8 @@ async function ficheBgg() {
 }
 
 const [ej, ph, ok, ml, sim, du] = await Promise.allSettled([
-  boutique(liens.espritjeu, parseEspritJeuSearch, 'latin1'),
-  boutique(liens.philibert, parsePhilibertSearch),
+  boutique(liens.espritjeu, parseEspritJeuSearch, 'latin1', parEdEspritJeu),
+  boutique(liens.philibert, parsePhilibertSearch, undefined, parEdPhilibert),
   okkazeo(),
   myludo(),
   recsBgg(),
@@ -158,4 +182,4 @@ const val = r => (r.status === 'fulfilled' ? r.value : null);
 // Lien direct vers la page BoardGameGeek, lu dans la fiche Okkazeo (null si inconnu : la page propose alors la recherche BGG).
 const bggUrl = (val(ok) || {}).bggUrl || null;
 const erreurs = [ej, ph, ok, ml, sim].map((r, i) => r.status === 'rejected' ? `${['espritjeu', 'philibert', 'okkazeo', 'myludo', 'bgg-recs'][i]}: ${(r.reason && r.reason.message) || String(r.reason)}` : null).filter(Boolean);
-return [{ json: { query: q, espritjeu: val(ej), philibert: val(ph), bgg, okkazeo: val(ok), myludo: val(ml), similaires: val(sim), duo: (val(du) || {}).duo || null, rejouabilite: (val(du) || {}).rejouabilite || null, bggUrl, liens, erreurs } }];
+return [{ json: { query: q, espritjeu: val(ej), philibert: val(ph), bgg, okkazeo: val(ok), myludo: val(ml), similaires: val(sim), editeurOk: !!((val(ml) || {}).editeurOk || (bgg && bgg.editeurOk)), duo: (val(du) || {}).duo || null, rejouabilite: (val(du) || {}).rejouabilite || null, bggUrl, liens, erreurs } }];

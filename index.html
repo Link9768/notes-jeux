@@ -265,8 +265,11 @@ function rejouHtml(r) {
 function homonymesHtml(d) {
   const m = d.myludo, h = m && m.homonymes;
   if (!h || h.length < 2) return '';
-  const puces = h.map(x => x.id === m.id ? `<b>${esc(x.annee || '?')}</b>` : `<button type="button" class="lien" data-hom="${esc(x.id)}" data-an="${esc(x.annee || '')}">${esc(x.annee || '?')}</button>`).join(' · ');
-  return `<div class="mut hom">Plusieurs jeux nommés « ${esc(m.titre)} » : ${puces}<br><span>Notes des boutiques : premier résultat du site, à vérifier.</span></div>`;
+  const nom = x => esc(x.annee || '?') + ((x.editeurs || [])[0] ? ` (${esc(x.editeurs[0])})` : '');
+  const puces = h.map(x => x.id === m.id ? `<b>${nom(x)}</b>` : `<button type="button" class="lien" data-hom="${esc(x.id)}" data-an="${esc(x.annee || '')}" data-ed="${esc((x.editeurs || []).join('|'))}">${nom(x)}</button>`).join(' · ');
+  const ex = (h.find(x => (x.editeurs || [])[0]) || { editeurs: [] }).editeurs[0];
+  const astuce = ex ? `<br><span>Astuce : tape le nom puis l'éditeur (« ${esc(m.titre)} ${esc(ex.split(' ')[0])} ») pour tomber directement dessus.</span>` : '';
+  return `<div class="mut hom">Plusieurs jeux nommés « ${esc(m.titre)} » : ${puces}${astuce}</div>`;
 }
 
 // Grand encart BoardGameGeek : note, infos pratiques, style de jeu (mécaniques et catégories BGG traduites en français).
@@ -721,6 +724,23 @@ const ECHECS = new Set();
 const cleDe = q => q.trim().toLowerCase();
 const enCache = q => { const c = CACHE.get(cleDe(q)); return c && Date.now() - c.t < CACHE_MS ? c.d : null; };
 
+// Recherche serveur ; ch = choix de l'utilisateur ou éditeur tapé : { ml, an, ed }.
+const appelRecherche = (q, ch) => fetch(API + '?q=' + encodeURIComponent(q) + (ch ? Object.entries({ ml: ch.ml, an: ch.an, ed: ch.ed }).filter(([, v]) => v).map(([k, v]) => '&' + k + '=' + encodeURIComponent(v)).join('') : ''))
+  .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); });
+const aTrouve = d => !!(d && (d.myludo || d.bgg || d.philibert || d.espritjeu));
+// « Loop Yellow » → nom « Loop » + éditeur « Yellow » (3 découpages au plus, du nom le plus long au plus court).
+function decoupagesEditeur(q) {
+  const mots = String(q || '').trim().split(/\s+/).filter(Boolean), out = [];
+  for (let k = mots.length - 1; k >= 1 && out.length < 3; k--) out.push({ nom: mots.slice(0, k).join(' '), editeur: mots.slice(k).join(' ') });
+  return out;
+}
+async function parEditeurTape(q) {
+  for (const { nom, editeur } of decoupagesEditeur(q)) {
+    const d = await appelRecherche(nom, { ed: editeur }).catch(() => null);
+    if (d && d.editeurOk && aTrouve(d)) return d;
+  }
+  return null;
+}
 function charger(q) {
   const cle = cleDe(q);
   const d = enCache(q);
@@ -728,9 +748,13 @@ function charger(q) {
   if (ENCOURS.has(cle)) return ENCOURS.get(cle);
   ECHECS.delete(cle);
   const ch = CHOIX.get(cle);
-  const p = fetch(API + '?q=' + encodeURIComponent(q) + (ch ? '&ml=' + encodeURIComponent(ch.ml) + '&an=' + encodeURIComponent(ch.an || '') : ''))
-    .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
-    .then(d => { CACHE.set(cle, { d, t: Date.now() }); return d; })
+  const p = appelRecherche(q, ch)
+    .then(async d => {
+      // « Loop Yellow » : rien trouvé tel quel → nom + éditeur (le serveur confirme avec editeurOk que l'éditeur correspond à un jeu).
+      if (!aTrouve(d) && !ch) d = (await parEditeurTape(q)) || d;
+      CACHE.set(cle, { d, t: Date.now() });
+      return d;
+    })
     .catch(err => { ECHECS.add(cle); throw err; })
     .finally(() => ENCOURS.delete(cle));
   ENCOURS.set(cle, p);
@@ -857,7 +881,7 @@ $('#out').addEventListener('click', e => {
     return;
   }
   const hom = t('[data-hom]');
-  if (hom && affiche) { const q = affiche.query; CHOIX.set(cleDe(q), { ml: hom.dataset.hom, an: hom.dataset.an }); CACHE.delete(cleDe(q)); search(q); return; }
+  if (hom && affiche) { const q = affiche.query; CHOIX.set(cleDe(q), { ml: hom.dataset.hom, an: hom.dataset.an, ed: hom.dataset.ed }); CACHE.delete(cleDe(q)); search(q); return; }
   const dc = t('[data-dec]');
   if (dc) { afficherDecouvrir(dc.dataset.dec); return; }
   if (t('[data-decplus]')) { decVus += 18; afficherDecouvrir(decOnglet); return; }

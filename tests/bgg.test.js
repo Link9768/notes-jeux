@@ -158,3 +158,14 @@ test('pickBgg : année demandée (homonymes), à 1 an près, sinon le plus voté
   assert.equal(pickBgg(things, 2019).id, '3');
   assert.equal(pickBgg(things, 2010).id, '1', 'année inconnue : choix normal');
 });
+
+test('pickBgg : éditeur tapé (Loop Yellow) → le jeu de cet éditeur ; éditeur inconnu → choix normal', () => {
+  const th = (id, an, votes, ed) => `<item type="boardgame" id="${id}"><name type="primary" value="Loop"/><yearpublished value="${an}"/><link type="boardgamepublisher" id="9" value="${ed}"/><statistics><ratings><usersrated value="${votes}"/></ratings></statistics></item>`;
+  const things = parseBggThings(`<items>${th(1, 2023, 123, 'Brainbraingames')}${th(2, 2026, 35, 'Yellow Mountain Editions')}${th(3, 2021, 9, 'Other Co')}</items>`);
+  assert.deepEqual(things[0].editeurs, ['Brainbraingames']);
+  assert.equal(pickBgg(things, null, 'Yellow').id, '2');
+  assert.equal(pickBgg(things, null, 'brainbraingames').id, '1');
+  assert.equal(pickBgg(things, null, 'Zzz').id, '1', 'aucun éditeur ne correspond : le plus voté');
+  assert.equal(pickBgg(things, 2021, 'Yellow').id, '2', 'l\u2019éditeur prime sur l\u2019année quand il correspond');
+  assert.equal(pickBgg(things).id, '1');
+});

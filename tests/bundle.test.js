@@ -340,3 +340,41 @@ test('bgg-fiche : année choisie (homonymes) → le jeu de cette année, sans an
   assert.equal((await run1('2025')).out.bgg.id, '500001');
   assert.equal((await run1('abc')).out.bgg.id, '407173', 'année illisible : choix normal');
 });
+
+// Trois jeux « Loop » de base chez trois éditeurs (ids 11, 22, 33) : l'éditeur tapé choisit le jeu, les éditeurs sont affichés.
+const LOOPS = [{ id: 11, an: 2023, ed: 'Brainbraingames' }, { id: 22, an: 2026, ed: 'Yellow Mountain Editions' }, { id: 33, an: 2021, ed: 'Autre Éditeur' }];
+const loopHttp = o => {
+  if (o.url === MYL + '/') return myludoResp(o);
+  if (o.url.includes('/search/')) return { statusCode: 200, body: { list: LOOPS.map(l => ({ id: l.id, code: 'loop-' + l.id, title: 'Loop', edition: l.an, type: 'basegame' })) } };
+  const id = Number(/id=(\d+)/.exec(o.url)[1]), l = LOOPS.find(x => x.id === id);
+  if (o.url.includes('type=info')) return { statusCode: 200, body: { themes: { mecanisme: {}, theme: {} }, people: { p1: { id: 9, title: l.ed, roles: ['Éditeur'] } } } };
+  if (o.url.includes('type=game')) return { statusCode: 200, body: { id, code: 'loop-' + id, title: 'Loop', edition: l.an, rating: { game: { audience: 10, note: '7,0' } } } };
+  return { statusCode: 404, body: '' };
+};
+const runLoop = query => run('sources', { nodes: { Webhook: { query: { q: 'loop', ...query } }, 'BGG Fiche': { bgg: null } }, http: loopHttp });
+
+test('sources : éditeurs des jeux au même titre, éditeur tapé → le jeu de cet éditeur, choix explicite prioritaire', async () => {
+  const base = await runLoop({});
+  assert.equal(base.out.myludo.id, '11', 'sans éditeur : le premier du site');
+  assert.deepEqual(base.out.myludo.homonymes.map(h => [h.annee, h.editeurs[0]]), [[2026, 'Yellow Mountain Editions'], [2023, 'Brainbraingames'], [2021, 'Autre Éditeur']]);
+  assert.equal((await runLoop({ ed: 'Yellow' })).out.myludo.id, '22');
+  assert.equal((await runLoop({ ed: 'Yellow' })).out.editeurOk, true, 'l’éditeur tapé correspond à un jeu');
+  assert.equal((await runLoop({ ed: 'Zzz' })).out.editeurOk, false);
+  assert.equal((await runLoop({})).out.editeurOk, false);
+  assert.equal((await runLoop({ ed: 'autre editeur' })).out.myludo.id, '33');
+  assert.equal((await runLoop({ ed: 'Zzz' })).out.myludo.id, '11', 'éditeur inconnu : choix normal');
+  assert.equal((await runLoop({ ed: 'Yellow', ml: '33' })).out.myludo.id, '33', 'le jeu cliqué dans la ligne l\u2019emporte');
+  const sansDoublon = await run('sources', { nodes: sourcesNodes(), http: myludoHttp() });
+  assert.equal(sansDoublon.out.myludo.homonymes, null);
+});
+
+test('bgg-fiche : éditeur tapé → jeu de cet éditeur, editeurOk', async () => {
+  const th = (id, an, votes, ed) => '<item type="boardgame" id="' + id + '"><name type="primary" value="Loop"/><yearpublished value="' + an + '"/><link type="boardgamepublisher" id="9" value="' + ed + '"/><statistics><ratings><usersrated value="' + votes + '"/></ratings></statistics></item>';
+  const data = '<items>' + th(407173, 2023, 123, 'Brainbraingames') + th(475385, 2026, 35, 'Yellow Mountain Editions') + '</items>';
+  const run1 = ed => run('bgg-fiche', { nodes: { 'BGG Candidats': { ids: '407173,475385' }, Webhook: { query: { q: 'loop', ...(ed ? { ed } : {}) } } }, input: { data } });
+  const a = (await run1('Yellow')).out.bgg;
+  assert.deepEqual([a.id, a.editeurOk], ['475385', true]);
+  const b = (await run1()).out.bgg;
+  assert.deepEqual([b.id, b.editeurOk], ['407173', undefined]);
+  assert.equal((await run1('Zzz')).out.bgg.id, '407173', 'éditeur inconnu : choix normal');
+});

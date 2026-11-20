@@ -618,3 +618,38 @@ test('ma ludothèque : 38 jeux préremplis, bouton à côté de Mes listes, hors
   assert.ok(out.innerHTML.includes('38 jeux') && out.innerHTML.includes('Ma ludothèque'), 'le retrait réaffiche la ludothèque');
   assert.equal(JSON.parse(stock['notesJeux.listes']).find(l => l.nom === 'Ma ludothèque').jeux.length, 38);
 });
+
+test('éditeur : affiché dans la ligne, transmis au clic (ed), et « Loop Yellow » → recherche Loop + éditeur Yellow', async () => {
+  const els = {}, urls = [];
+  const elx = sel => (els[sel] = els[sel] || { innerHTML: '', value: '', handlers: {}, addEventListener(t, h) { this.handlers[t] = h; }, querySelectorAll: () => [], scrollIntoView() {}, focus() {} });
+  const homs = [{ id: '22', annee: 2026, editeurs: ['Yellow Mountain Editions'] }, { id: '11', annee: 2023, editeurs: ['Iello', 'Autre'] }];
+  const ctx = { document: { querySelector: elx }, location: { search: '' }, history: { replaceState() {} }, scrollTo() {}, URLSearchParams,
+    fetch: async u => { u = String(u); urls.push(u); if (!u.includes('notes-jeux?q=')) return { ok: false };
+      const q = decodeURIComponent(/[?&]q=([^&]*)/.exec(u)[1]), ed = /[?&]ed=([^&]*)/.exec(u), ml = /[?&]ml=([0-9]+)/.exec(u);
+      if (/^Loop [A-Za-z]+$/.test(q)) return { ok: true, json: async () => ({ query: q, myludo: null, bgg: null, philibert: null, espritjeu: null, liens: {} }) };
+      const id = ml ? ml[1] : ed && /yellow/i.test(decodeURIComponent(ed[1])) ? '22' : '11';
+      return { ok: true, json: async () => ({ query: q, ...(ed && /yellow/i.test(decodeURIComponent(ed[1])) ? { editeurOk: true } : {}), myludo: { id, titre: 'Loop', annee: id === '22' ? 2026 : 2023, homonymes: homs }, liens: { bgg: '#' }, okkazeo: null }) }; } };
+  const f = vm.runInNewContext(`${script}; ({ lancer })`, ctx);
+  f.lancer('Loop');
+  await new Promise(r => setTimeout(r, 10));
+  const out = els['#out'];
+  assert.ok(out.innerHTML.includes('2026 (Yellow Mountain Editions)') && out.innerHTML.includes('<b>2023 (Iello)</b>'), 'éditeurs dans la ligne');
+  assert.ok(out.innerHTML.includes('data-ed="Yellow Mountain Editions"') && out.innerHTML.includes('Astuce : tape le nom puis l\'éditeur'), 'astuce');
+  out.handlers.click({ target: { closest: s => (s === '[data-hom]' ? { dataset: { hom: '22', an: '2026', ed: 'Yellow Mountain Editions' } } : null) } });
+  await new Promise(r => setTimeout(r, 10));
+  const rech = urls.filter(u => u.includes('notes-jeux?q='));
+  assert.ok(rech[rech.length - 1].includes('q=Loop&ml=22&an=2026&ed=Yellow%20Mountain%20Editions'), rech[rech.length - 1]);
+  // « Loop Yellow » : la 1re recherche ne trouve rien → découpée en nom + éditeur
+  urls.length = 0;
+  f.lancer('Loop Yellow');
+  await new Promise(r => setTimeout(r, 20));
+  const r2 = urls.filter(u => u.includes('notes-jeux?q='));
+  assert.ok(r2[0].includes('q=Loop%20Yellow') && r2[1].includes('q=Loop&ed=Yellow'), r2.join(' | '));
+  assert.ok(out.innerHTML.includes('<b>2026 (Yellow Mountain Editions)</b>'), 'le jeu de l\u2019éditeur tapé est affiché');
+  // éditeur qui ne correspond à rien : on garde « rien trouvé » plutôt qu\u2019un jeu au hasard
+  urls.length = 0;
+  const f2 = vm.runInNewContext(`${script}; ({ lancer })`, { ...ctx, document: { querySelector: elx } });
+  f2.lancer('Loop Zzz');
+  await new Promise(r => setTimeout(r, 20));
+  assert.ok(!els['#out'].innerHTML.includes('Plusieurs jeux nommés'), 'pas de jeu au hasard');
+});
