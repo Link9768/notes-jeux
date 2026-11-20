@@ -105,6 +105,7 @@ button.chip:hover,button.chip.on{background:var(--bgg);color:#fff}
 .dec img,.dec .img0{width:48px;height:48px;object-fit:contain;border-radius:6px;background:var(--line);flex:none}
 .dec-t{flex:1;min-width:0}
 .dec .chip{flex:none;white-space:nowrap;border:0;color:var(--txt);cursor:pointer}
+.petit.icone{padding:5px 9px;margin-left:-4px}
 .dec-b{display:flex;flex-direction:column;align-items:stretch;gap:4px;flex:none}
 .dec-b .chip{text-align:center}
 .ml.toi .body .dec .raison{padding:2px 0 0}
@@ -470,16 +471,16 @@ function comparerHtml(liste) {
 function titresOuverts() {
   return onglets.map(q => { const d = enCache(q); return (d && d.myludo && d.myludo.titre) || q; });
 }
-// Tous les jeux de « Mes listes » (la ludothèque est à part : ces jeux, on les a déjà), sans doublon d'une liste à l'autre.
+// Absolument tous les jeux de toutes les listes (ludothèque comprise), sans doublon d'une liste à l'autre.
 function jeuxDesListes() {
   const vus = new Set(), out = [];
-  for (const l of listes) if (l.nom !== LUDO) for (const j of l.jeux) if (!vus.has(j.trim().toLowerCase()) && vus.add(j.trim().toLowerCase())) out.push(j);
+  for (const l of listes) for (const j of l.jeux) if (!vus.has(j.trim().toLowerCase()) && vus.add(j.trim().toLowerCase())) out.push(j);
   return out;
 }
 function majVers() {
   const v = $('#vers');
   const n = listes.filter(l => l.nom !== LUDO).reduce((s, l) => s + l.jeux.length, 0), nl = listes.find(l => l.nom === LUDO).jeux.length, nj = jeuxDesListes().length;
-  if (v) v.innerHTML = `<button type="button" class="petit" id="versListes">📋 Mes listes${n ? ` (${n})` : ''}</button>${nj >= 2 ? `<button type="button" class="petit" id="versToutes" title="Envoie tous les jeux de Mes listes (sans la ludothèque) dans la case du matchmaking">🛒 Listes → matchmaking (${nj})</button>` : ''}<button type="button" class="petit" id="versLudo">📚 Ma ludothèque${nl ? ` (${nl})` : ''}</button><button type="button" class="petit" id="versDec">🔥 Découvrir</button>`
+  if (v) v.innerHTML = `<button type="button" class="petit" id="versListes">📋 Mes listes${n ? ` (${n})` : ''}</button>${nj >= 2 ? `<button type="button" class="petit icone" id="versToutes" title="Envoyer les ${nj} jeux de toutes mes listes au matchmaking" aria-label="Envoyer les ${nj} jeux de toutes mes listes au matchmaking">🛒</button>` : ''}<button type="button" class="petit" id="versLudo">📚 Ma ludothèque${nl ? ` (${nl})` : ''}</button><button type="button" class="petit" id="versDec">🔥 Découvrir</button>`
     + (onglets.length >= 2 ? `<button type="button" class="petit" id="versPanier">🛒 ${onglets.length} jeux → matchmaking</button>` : '');
 }
 

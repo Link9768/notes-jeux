@@ -654,20 +654,20 @@ test('éditeur : affiché dans la ligne, transmis au clic (ed), et « Loop Yello
   assert.ok(!els['#out'].innerHTML.includes('Plusieurs jeux nommés'), 'pas de jeu au hasard');
 });
 
-test('bouton « Listes → matchmaking » : tous les jeux de Mes listes, sans doublon, sans la ludothèque', () => {
+test('icône 🛒 à côté de Mes listes : tous les jeux de toutes les listes (ludothèque comprise), sans doublon', () => {
   const els = {}, stock = {};
   const elx = sel => (els[sel] = els[sel] || { innerHTML: '', value: '', handlers: {}, addEventListener(t, h) { this.handlers[t] = h; }, querySelectorAll: () => [], scrollIntoView() {}, focus() {} });
   stock['notesJeux.listes'] = JSON.stringify([{ nom: 'À essayer', jeux: ['Azul', 'Clank'] }, { nom: 'À acheter', jeux: ['azul ', 'Wingspan'] }, { nom: 'Soirées', jeux: ['Dixit'] }, { nom: 'Ma ludothèque', jeux: ['Faraway'] }]);
   const ctx = { document: { querySelector: elx }, location: { search: '' }, history: { replaceState() {} }, scrollTo() {}, URLSearchParams, localStorage: { getItem: k => stock[k] ?? null, setItem: (k, v) => { stock[k] = v; } }, fetch: async () => ({ ok: false }) };
   const f = vm.runInNewContext(`${script}; ({ majVers })`, ctx);
   f.majVers();
-  assert.ok(els['#vers'].innerHTML.includes('🛒 Listes → matchmaking (4)'), els['#vers'].innerHTML);
+  assert.ok(els['#vers'].innerHTML.includes('id="versToutes"') && els['#vers'].innerHTML.includes('Envoyer les 5 jeux de toutes mes listes au matchmaking') && els['#vers'].innerHTML.includes('>🛒</button>'), els['#vers'].innerHTML);
   assert.ok(els['#vers'].innerHTML.indexOf('id="versListes"') < els['#vers'].innerHTML.indexOf('id="versToutes"'), 'juste à côté de Mes listes');
   els['#vers'].handlers.click({ target: { closest: s => (s === '#versToutes' ? {} : null) } });
-  assert.equal(els['#pj'].value, ['Azul', 'Clank', 'Wingspan', 'Dixit'].join(String.fromCharCode(10)), 'ni doublon (Azul), ni ludothèque (Faraway)');
-  // moins de 2 jeux : pas de bouton
+  assert.equal(els['#pj'].value, ['Azul', 'Clank', 'Wingspan', 'Dixit', 'Faraway'].join(String.fromCharCode(10)), 'sans doublon (Azul), ludothèque comprise (Faraway)');
+  // une seule liste remplie : la ludothèque (38 jeux de départ) compte aussi, l'icône reste là
   stock['notesJeux.listes'] = JSON.stringify([{ nom: 'À essayer', jeux: ['Azul'] }]);
   const f2 = vm.runInNewContext(`${script}; ({ majVers })`, { ...ctx, document: { querySelector: elx } });
   f2.majVers();
-  assert.ok(!els['#vers'].innerHTML.includes('versToutes'));
+  assert.ok(els['#vers'].innerHTML.includes('Envoyer les 39 jeux de toutes mes listes'), els['#vers'].innerHTML.slice(0, 300));
 });
