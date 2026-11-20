@@ -491,6 +491,31 @@ test('Découvrir : onglets, Pour toi sans les jeux déjà possédés, voir plus,
   assert.ok(els['#vers'].innerHTML.includes('🛒 2 jeux → matchmaking'), 'un onglet de moins');
 });
 
+test('homonymes : ligne « Plusieurs jeux nommés Loop », clic → recherche relancée avec ml et an, année affichée en gras', async () => {
+  const els = {}, urls = [];
+  const elx = sel => (els[sel] = els[sel] || { innerHTML: '', value: '', handlers: {}, addEventListener(t, h) { this.handlers[t] = h; }, querySelectorAll: () => [], scrollIntoView() {}, focus() {} });
+  const homs = [{ id: '2', annee: 2025 }, { id: '1', annee: 2023 }];
+  const ctx = { document: { querySelector: elx }, location: { search: '' }, history: { replaceState() {} }, scrollTo() {}, URLSearchParams,
+    fetch: async u => { urls.push(String(u)); if (!String(u).includes('notes-jeux?q=')) return { ok: false };
+      const m = /[?&]ml=([0-9]+)/.exec(String(u)); const id = m ? m[1] : "1";
+      return { ok: true, json: async () => ({ query: 'Loop', myludo: { id, titre: 'Loop', annee: id === '2' ? 2025 : 2023, homonymes: homs }, liens: { bgg: '#' }, okkazeo: null }) }; } };
+  const f = vm.runInNewContext(`${script}; ({ lancer })`, ctx);
+  f.lancer('Loop');
+  await new Promise(r => setTimeout(r, 10));
+  const out = els['#out'];
+  assert.ok(out.innerHTML.includes('Plusieurs jeux nommés « Loop »') && out.innerHTML.includes('<b>2023</b>') && out.innerHTML.includes('data-hom="2" data-an="2025"'));
+  assert.ok(!out.innerHTML.includes('data-hom="1"'), 'le jeu affiché n’est pas cliquable');
+  assert.ok(!urls[0].includes('&ml='), 'première recherche : choix automatique');
+  out.handlers.click({ target: { closest: s => (s === '[data-hom]' ? { dataset: { hom: '2', an: '2025' } } : null) } });
+  await new Promise(r => setTimeout(r, 10));
+  const recherches = urls.filter(u => u.includes('notes-jeux?q='));
+  assert.ok(recherches[recherches.length - 1].includes('q=Loop&ml=2&an=2025'), recherches.join(' | '));
+  assert.ok(out.innerHTML.includes('<b>2025</b>') && out.innerHTML.includes('data-hom="1" data-an="2023"'));
+  f.lancer('Loop'); // le choix est gardé pour cette recherche
+  await new Promise(r => setTimeout(r, 10));
+  assert.ok(out.innerHTML.includes('<b>2025</b>'), 'choix conservé quand on relance la même recherche');
+});
+
 test('liste collée (un jeu par ligne, puces, numéros, tableur) → titres séparés par des virgules, espaces gardés', () => {
   const f = vm.runInNewContext(`${script}; ({ listeCollee })`, { document: { querySelector: el }, location: { search: '' }, history: {}, fetch: async () => { throw new Error('x'); }, URLSearchParams });
   assert.equal(f.listeCollee('7 Wonders Duel\r\n- Abyss\n\n2. Skull King\tAzul\n'), '7 Wonders Duel, Abyss, Skull King, Azul');

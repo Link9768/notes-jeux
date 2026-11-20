@@ -19,6 +19,7 @@ a{color:var(--acc)}
 .head img{width:64px;height:64px;object-fit:cover;border-radius:10px;background:var(--card)}
 .head h1{font-size:20px;margin:0}
 .mut{color:var(--mut);font-size:12px}
+.hom{margin-top:4px}.hom span{font-size:11px;opacity:.8}
 .tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
 .tile{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px;min-width:0}
 .src{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--mut);display:flex;gap:6px;align-items:center}
@@ -259,6 +260,15 @@ function rejouHtml(r) {
   return `<span title="Parties enregistrées sur BGG par propriétaire du jeu (repères : Exit 0,6 · Clank 3 · Azul 5 · The Crew 7)">🔁 ${esc(txt)}${detail}${note}</span>`;
 }
 
+// « Autres jeux nommés Loop : 2025 · 2023 » : plusieurs jeux de base MyLudo au même titre → l'utilisateur choisit celui qu'il veut
+// (un clic relance toute la fiche dessus : MyLudo par id, BGG par année). Les boutiques gardent leur choix (titre seul, sans année).
+function homonymesHtml(d) {
+  const m = d.myludo, h = m && m.homonymes;
+  if (!h || h.length < 2) return '';
+  const puces = h.map(x => x.id === m.id ? `<b>${esc(x.annee || '?')}</b>` : `<button type="button" class="lien" data-hom="${esc(x.id)}" data-an="${esc(x.annee || '')}">${esc(x.annee || '?')}</button>`).join(' · ');
+  return `<div class="mut hom">Plusieurs jeux nommés « ${esc(m.titre)} » : ${puces}<br><span>Notes des boutiques : premier résultat du site, à vérifier.</span></div>`;
+}
+
 // Grand encart BoardGameGeek : note, infos pratiques, style de jeu (mécaniques et catégories BGG traduites en français).
 function bggCard(d, games) {
   const b = d.bgg, pied = `<footer>${liens(d, games)}</footer>`;
@@ -403,7 +413,7 @@ function render(d, games) {
   affiche = d;
   const m = d.myludo, L = d.liens;
   const head = m
-    ? `<div class="head">${m.image ? `<img src="${esc(m.image)}" alt="">` : ''}<div><h1>${esc(m.titre)}</h1><div class="mut">${[m.annee, m.joueurs && m.joueurs + ' joueurs', m.age].filter(Boolean).map(esc).join(' · ')}${bgaBadge(d, games)}${duoBadge(d)}</div>${listesMenu(d)}</div></div>`
+    ? `<div class="head">${m.image ? `<img src="${esc(m.image)}" alt="">` : ''}<div><h1>${esc(m.titre)}</h1><div class="mut">${[m.annee, m.joueurs && m.joueurs + ' joueurs', m.age].filter(Boolean).map(esc).join(' · ')}${bgaBadge(d, games)}${duoBadge(d)}</div>${homonymesHtml(d)}${listesMenu(d)}</div></div>`
     : `<div class="head"><div><h1>${esc(d.query)}</h1><div class="mut">${bgaBadge(d, games)}${duoBadge(d)}</div>${listesMenu(d)}</div></div>`;
   // Tuile MyLudo minimaliste, comme les boutiques : note, nombre de notes, titre retenu, difficulté MyLudo (⚖ sur 5, en plus de celle de BGG).
   const tiles = `<div class="tiles">${tile('Esprit Jeu', 'var(--ej)', d.espritjeu, 5, 'avis', L.espritjeu)}${tile('Philibert', 'var(--ph)', d.philibert, 5, 'avis', L.philibert)}${tile('MyLudo', 'var(--ml)', m && { note: m.note, avis: m.avis, titre: m.titre, url: m.url, poids: m.complexite }, 10, 'notes', L.myludo || '#')}</div>`;
@@ -705,6 +715,8 @@ function skeleton() {
 const CACHE = new Map();
 const CACHE_MS = 15 * 60 * 1000;
 const ENCOURS = new Map(); // chargements en cours : un même jeu n'est demandé qu'une fois
+// Homonyme choisi par l'utilisateur (« Loop » 2025 plutôt que 2023) : recherche en minuscules → { ml: id MyLudo, an: année }.
+const CHOIX = new Map();
 const ECHECS = new Set();
 const cleDe = q => q.trim().toLowerCase();
 const enCache = q => { const c = CACHE.get(cleDe(q)); return c && Date.now() - c.t < CACHE_MS ? c.d : null; };
@@ -715,7 +727,8 @@ function charger(q) {
   if (d) return Promise.resolve(d);
   if (ENCOURS.has(cle)) return ENCOURS.get(cle);
   ECHECS.delete(cle);
-  const p = fetch(API + '?q=' + encodeURIComponent(q))
+  const ch = CHOIX.get(cle);
+  const p = fetch(API + '?q=' + encodeURIComponent(q) + (ch ? '&ml=' + encodeURIComponent(ch.ml) + '&an=' + encodeURIComponent(ch.an || '') : ''))
     .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
     .then(d => { CACHE.set(cle, { d, t: Date.now() }); return d; })
     .catch(err => { ECHECS.add(cle); throw err; })
@@ -843,6 +856,8 @@ $('#out').addEventListener('click', e => {
     afficherListes(nom === LUDO ? 'ludo' : 'listes');
     return;
   }
+  const hom = t('[data-hom]');
+  if (hom && affiche) { const q = affiche.query; CHOIX.set(cleDe(q), { ml: hom.dataset.hom, an: hom.dataset.an }); CACHE.delete(cleDe(q)); search(q); return; }
   const dc = t('[data-dec]');
   if (dc) { afficherDecouvrir(dc.dataset.dec); return; }
   if (t('[data-decplus]')) { decVus += 18; afficherDecouvrir(decOnglet); return; }

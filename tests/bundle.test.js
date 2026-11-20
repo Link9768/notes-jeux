@@ -270,11 +270,11 @@ test('bgg-candidats : ids depuis le XML de recherche, toujours 1 item', async ()
 });
 test('bgg-fiche : fiche si ids, sinon null', async () => {
   const xml = '<items><item type="boardgame" id="201808"><name type="primary" value="Clank!"/><statistics><ratings><usersrated value="10"/><average value="7.75"/></ratings></statistics></item></items>';
-  const ok = await run('bgg-fiche', { nodes: { 'BGG Candidats': { ids: '201808' } }, input: { data: xml } });
+  const ok = await run('bgg-fiche', { nodes: { 'BGG Candidats': { ids: '201808' }, Webhook: { query: { q: 'clank' } } }, input: { data: xml } });
   assert.equal(ok.out.bgg.note, 7.8);
-  const none = await run('bgg-fiche', { nodes: { 'BGG Candidats': { ids: '' } }, input: { data: '' } });
+  const none = await run('bgg-fiche', { nodes: { 'BGG Candidats': { ids: '' }, Webhook: { query: { q: 'clank' } } }, input: { data: '' } });
   assert.equal(none.out.bgg, null);
-  const abyss = await run('bgg-fiche', { nodes: { 'BGG Candidats': { ids: '155987' } }, input: { data: fx('bgg-thing-abyss.xml') } });
+  const abyss = await run('bgg-fiche', { nodes: { 'BGG Candidats': { ids: '155987' }, Webhook: { query: { q: 'abyss' } } }, input: { data: fx('bgg-thing-abyss.xml') } });
   assert.deepEqual([abyss.out.bgg.mecaniques.length + abyss.out.bgg.themes.length, abyss.out.bgg.mecaniques[0].nom], [9, 'Enchères']);
   assert.deepEqual([abyss.out.bgg.rang, abyss.out.bgg.ideal, abyss.out.bgg.extensions], [453, '4', 7]);
 });
@@ -318,4 +318,25 @@ test('sources : version duo intégrable (Res Arcana → Res Arcana Duo) ; geekit
   assert.equal(panne.out.duo, null);
   assert.equal(panne.out.rejouabilite, null);
   assert.ok(!panne.out.erreurs.some(e => /duo|geekitems/.test(e)), JSON.stringify(panne.out.erreurs));
+});
+
+test('sources : homonymes MyLudo (aucun pour Clank), jeu choisi par id (ml) → sa fiche est lue', async () => {
+  const sans = await run('sources', { nodes: sourcesNodes(), http: myludoHttp() });
+  assert.equal(sans.out.myludo.id, '19410');
+  assert.equal(sans.out.myludo.homonymes, null, 'un seul Clank! de base : pas de ligne');
+  const autre = JSON.parse(fx('myludo-search-clank.json')).list.find(g => g.type === 'basegame' && String(g.id) !== '19410');
+  const { out, calls } = await run('sources', { nodes: { Webhook: { query: { q: 'clank', ml: ' ' + autre.id + 'x' } }, 'BGG Fiche': { bgg: null } }, http: myludoHttp() });
+  assert.equal(out.myludo.id, String(autre.id), 'le jeu choisi remplace le choix automatique');
+  assert.ok(calls.some(c => c.url.includes('type=game&id=' + autre.id)));
+  const faux = await run('sources', { nodes: { Webhook: { query: { q: 'clank', ml: '999999' } }, 'BGG Fiche': { bgg: null } }, http: myludoHttp() });
+  assert.equal(faux.out.myludo.id, '19410', 'id inconnu : choix normal');
+});
+
+test('bgg-fiche : année choisie (homonymes) → le jeu de cette année, sans année → le plus voté', async () => {
+  const th = (id, an, votes) => '<item type="boardgame" id="' + id + '"><name type="primary" value="Loop"/><yearpublished value="' + an + '"/><statistics><ratings><usersrated value="' + votes + '"/></ratings></statistics></item>';
+  const data = '<items>' + th(407173, 2023, 123) + th(500001, 2025, 4) + '</items>';
+  const run1 = an => run('bgg-fiche', { nodes: { 'BGG Candidats': { ids: '407173,500001' }, Webhook: { query: { q: 'loop', ...(an ? { an } : {}) } } }, input: { data } });
+  assert.equal((await run1()).out.bgg.id, '407173');
+  assert.equal((await run1('2025')).out.bgg.id, '500001');
+  assert.equal((await run1('abc')).out.bgg.id, '407173', 'année illisible : choix normal');
 });

@@ -1,5 +1,6 @@
 const q = String($('Webhook').first().json.query.q || '').trim().slice(0, 100);
 const enc = encodeURIComponent(q);
+const mlChoisi = String($('Webhook').first().json.query.ml || '').replace(/[^0-9]/g, '').slice(0, 10); // homonyme choisi sur la page (id MyLudo)
 const liens = {
   espritjeu: 'https://www.espritjeu.com/dhtml/resultat_recherche.php?keywords=' + enc,
   philibert: 'https://www.philibertnet.com/fr/recherche?search_query=' + enc,
@@ -86,8 +87,11 @@ async function myludo() {
     if (r.statusCode >= 400) throw new Error(`HTTP ${r.statusCode} myludo ${path.split('?')[0]}`);
     return typeof r.body === 'string' ? JSON.parse(r.body) : r.body;
   };
-  const p = pickMyludo(q, parseMyludoSearch(await call('search/datas.php?type=search&tab=games&page=1&order=bymagic&words=' + enc)));
+  const candidats = parseMyludoSearch(await call('search/datas.php?type=search&tab=games&page=1&order=bymagic&words=' + enc));
+  const p = pickMyludo(q, candidats, mlChoisi);
   if (!p) return null;
+  const homonymes = homonymesMyludo(p, candidats); // jeux de base au même titre (année) : la page propose de choisir
+  const idAnnee = { id: p.id, homonymes };
   const fiche = parseMyludoGame(await call('game/datas.php?type=game&id=' + encodeURIComponent(p.id)));
   // Mécaniques et jeux du même auteur : facultatifs. Une panne met ces champs à null sans effacer la note.
   try {
@@ -110,9 +114,9 @@ async function myludo() {
         memeAuteur = { nom: auteur.nom, jeux: pickAuteurJeux(fiche.titre, liste, populaires) };
       }
     } catch (e) { memeAuteur = null; }
-    return { ...fiche, mecaniques: topMecaniques(tagLists), themes: info.themes.slice(0, 3), memeAuteur };
+    return { ...fiche, ...idAnnee, mecaniques: topMecaniques(tagLists), themes: info.themes.slice(0, 3), memeAuteur };
   } catch (e) {
-    return { ...fiche, mecaniques: null, themes: null, memeAuteur: null };
+    return { ...fiche, ...idAnnee, mecaniques: null, themes: null, memeAuteur: null };
   }
 }
 

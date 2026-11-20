@@ -148,3 +148,13 @@ test('pickRejouabilite : parties par propriétaire, escape game, Legacy, jeu anc
   assert.equal(pickRejouabilite(fiche({}, '1995'), { numplays: '453577', numowned: '246777' }).ancien, true); // Catan
   assert.equal(pickRejouabilite(fiche(), null), null);
 });
+
+test('pickBgg : année demandée (homonymes), à 1 an près, sinon le plus voté', () => {
+  const th = (id, an, votes) => `<item type="boardgame" id="${id}"><name type="primary" value="Loop"/><yearpublished value="${an}"/><statistics><ratings><usersrated value="${votes}"/></ratings></statistics></item>`;
+  const things = parseBggThings(`<items>${th(1, 2023, 123)}${th(2, 2025, 4)}${th(3, 2019, 50)}</items>`);
+  assert.equal(pickBgg(things).id, '1', 'sans année : le plus voté');
+  assert.equal(pickBgg(things, 2025).id, '2');
+  assert.equal(pickBgg(things, 2024).id, '1', 'à 1 an près : égalité, le plus voté');
+  assert.equal(pickBgg(things, 2019).id, '3');
+  assert.equal(pickBgg(things, 2010).id, '1', 'année inconnue : choix normal');
+});

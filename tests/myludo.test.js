@@ -87,3 +87,24 @@ test('même auteur : au plus 7 jeux, liste vide acceptée', () => {
   assert.deepEqual(pickAuteurJeux('X', []), []);
   assert.deepEqual(pickAuteurJeux('X', null), []);
 });
+
+test('homonymes : jeux de base au titre identique, année, choix par id', () => {
+  const { homonymesMyludo } = require('../lib/myludo.js');
+  const json = { list: [
+    { id: '1', code: 'loop', title: 'Loop', edition: 2023, type: 'basegame' },
+    { id: '2', code: 'loop-2', title: 'Loop', edition: 2025, type: 'basegame' },
+    { id: '3', code: 'loop-3', title: 'LOOP', edition: 2019, type: 'basegame' },
+    { id: '4', code: 'loop-ext', title: 'Loop', edition: 2024, type: 'extension' },
+    { id: '5', code: 'tales', title: 'Tales From The Loop', edition: 2020, type: 'basegame' },
+    { id: '6', code: 'loop-bis', title: 'Loop', edition: 2023, type: 'basegame' },
+  ] };
+  const c = parseMyludoSearch(json);
+  assert.equal(c[0].annee, 2023);
+  const choisi = pickMyludo('Loop', c);
+  assert.equal(choisi.id, '1', 'sans choix : le premier du site');
+  assert.deepEqual(homonymesMyludo(choisi, c), [{ id: '2', annee: 2025 }, { id: '1', annee: 2023 }, { id: '3', annee: 2019 }], 'extension et titre différent écartés, une ligne par année, plus récent d\u2019abord');
+  assert.deepEqual(homonymesMyludo(c[5], c).filter(h => h.annee === 2023), [{ id: '6', annee: 2023 }], 'le jeu choisi garde sa place à année égale');
+  assert.equal(pickMyludo('Loop', c, '2').id, '2', 'choix par id');
+  assert.equal(pickMyludo('Loop', c, '999').id, '1', 'id inconnu : choix normal');
+  assert.equal(homonymesMyludo(pickMyludo('Tales From The Loop', c), c), null, 'un seul jeu : pas de ligne');
+});
