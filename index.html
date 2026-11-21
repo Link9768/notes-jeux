@@ -136,6 +136,7 @@ button.chip:hover,button.chip.on{background:var(--bgg);color:#fff}
 .vend{border:1px solid var(--line);border-radius:10px;padding:10px}
 .vend .top{display:flex;flex-wrap:wrap;gap:4px 8px;align-items:baseline;margin-bottom:4px}
 .vend .top .right{margin-left:auto}
+.cp{background:none;border:0;cursor:pointer;font-size:13px;padding:0 2px}
 .ann2{display:flex;justify-content:space-between;gap:8px;padding:5px 0;border-top:1px solid var(--line)}
 .skel{height:14px;border-radius:6px;margin:8px 0;background:linear-gradient(90deg,var(--line),#3a3a42,var(--line));background-size:200% 100%;animation:sk 1.2s infinite}
 @keyframes sk{to{background-position:-200% 0}}
@@ -1028,7 +1029,7 @@ function panierHtml(p) {
   const jeux = (p.jeux || []).map((j, i) => ({ j, i })).sort((a, b) => (b.j.titre ? b.j.annonces || 0 : -1) - (a.j.titre ? a.j.annonces || 0 : -1) || a.i - b.i).map(({ j }) => j).map(j => (j.titre
     ? `<span class="chip">${extNouv(j.url, esc(j.titre))} · ${j.annonces} annonce${j.annonces > 1 ? 's' : ''}</span>`
     : `<span class="chip th">${esc(j.demande)} : introuvable sur Okkazeo</span>`)).join('');
-  const carte = v => `<div class="vend"><div class="top"><b>${esc(v.vendeur)}</b><span class="mut">${esc(v.ville ?? '')}${v.cp ? ` (${esc(v.cp)})` : ''}${v.nbAnnonces ? ` · ${v.nbAnnonces} annonce${v.nbAnnonces > 1 ? 's' : ''} en tout` : ''}</span>${v.procheParis ? '<span class="tag ok">près de Paris</span>' : ''}${v.envoi ? '<span class="tag">envoi</span>' : ''}<span class="right"><b>${v.nbJeux} jeux</b> · ${fr(v.total)} €</span></div>${v.annonces.map(a => `<div class="ann2"><span>${esc(a.jeu)} <span class="mut">${esc(a.etat ?? '')}</span></span><span>${fr(a.prix)} € ${a.url ? extNouv(a.url, 'annonce ↗') : ''}</span></div>`).join('')}</div>`;
+  const carte = v => `<div class="vend"><div class="top"><b>${esc(v.vendeur)}</b><button class="cp" data-copie="${esc(v.annonces.map(a => a.jeu).join(', '))}" title="Copier la liste des jeux">📋</button><span class="mut">${esc(v.ville ?? '')}${v.cp ? ` (${esc(v.cp)})` : ''}${v.nbAnnonces ? ` · ${v.nbAnnonces} annonce${v.nbAnnonces > 1 ? 's' : ''} en tout` : ''}</span>${v.procheParis ? '<span class="tag ok">près de Paris</span>' : ''}${v.envoi ? '<span class="tag">envoi</span>' : ''}<span class="right"><b>${v.nbJeux} jeux</b> · ${fr(v.total)} €</span></div>${v.annonces.map(a => `<div class="ann2"><span>${esc(a.jeu)} <span class="mut">${esc(a.etat ?? '')}</span></span><span>${fr(a.prix)} € ${a.url ? extNouv(a.url, 'annonce ↗') : ''}</span></div>`).join('')}</div>`;
   const vendeurs = (p.vendeurs || []).length
     ? p.vendeurs.map(carte).join('')
     : '<p class="na">Aucun vendeur ne propose au moins 2 de ces jeux.</p>';
@@ -1042,6 +1043,11 @@ function panierHtml(p) {
   return `<div class="chips">${jeux}</div>${securises}${securises ? '<h3 class="titre-l">Autres vendeurs</h3>' : ''}${vendeurs}${err}`;
 }
 
+$('#pr').addEventListener('click', e => {
+  const b = e.target.closest('.cp');
+  if (!b) return;
+  navigator.clipboard.writeText(b.dataset.copie).then(() => { b.textContent = '✓'; setTimeout(() => { b.textContent = '📋'; }, 1500); }, () => {});
+});
 const jeuxSaisis = () => $('#pj').value.split(/[\n,;|]+/).map(x => x.trim()).filter(Boolean);
 const secuSaisie = () => $('#ps').value.split(/[\n,;|]+/).map(x => x.trim()).filter(Boolean).slice(0, 3);
 // Matchmaking Leboncoin : le favori lbc.js lit la liste dans le hash de l'onglet ouvert ici.

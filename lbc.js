@@ -20,7 +20,7 @@
   racine.innerHTML = `<style>
     .box{background:#1c1c20;color:#ececf1;font:13px/1.4 system-ui,sans-serif;padding:10px 12px;border:2px solid #ec5a13;border-radius:12px}
     header{display:flex;justify-content:space-between;align-items:center;font-size:15px}
-    button{background:none;border:0;color:#ececf1;font-size:18px;cursor:pointer}
+    button{background:none;border:0;color:#ececf1;font-size:18px;cursor:pointer}.cp{font-size:13px;padding:0 2px}
     .mut{color:#8b8b96}.chips{display:flex;flex-wrap:wrap;gap:4px;margin:6px 0}
     .chip{background:#2c2c32;border-radius:10px;padding:2px 8px;font-size:12px}
     .msg{background:#4a2a14;border-radius:8px;padding:6px 8px}
@@ -31,6 +31,15 @@
   </style><div class="box"><header><b>Matchmaking Leboncoin</b><button id="x" title="Fermer">✕</button></header><div id="c"></div></div>`;
   racine.getElementById('x').addEventListener('click', () => { hote.style.display = 'none'; });
   document.documentElement.appendChild(hote);
+  racine.addEventListener('click', e => {
+    const b = e.target.closest && e.target.closest('.cp');
+    if (!b) return;
+    const t = b.dataset.copie || '', ok = () => { b.textContent = '✓'; setTimeout(() => { b.textContent = '📋'; }, 1500); };
+    (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(ok, () => {
+      const a = document.createElement('textarea'); a.value = t; racine.appendChild(a); a.select();
+      try { document.execCommand('copy'); ok(); } catch (x) {} a.remove();
+    });
+  });
   const dessine = html => { racine.getElementById('c').innerHTML = html; };
   const message = m => dessine(`<p class="msg">${m}</p>`);
   window.__njLbc = { enCours: true, montre() { hote.style.display = ''; }, retire() { hote.remove(); } };
