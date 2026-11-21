@@ -55,6 +55,14 @@ const parEdEspritJeu = async (cands, p) => {
   return i >= 0 ? exacts[i] : null;
 };
 
+// Ludifolie (3e boutique, prix neuf seulement) : prix du jour et prix de base lus sur la page de recherche. Facultatif : une panne ne fait aucune erreur.
+async function ludifolie() {
+  try {
+    const p = pickProduct(q, parseLudifolieSearch(await get('https://www.ludifolie.com/recherche?controller=search&s=' + enc)));
+    return p && p.prix != null ? { titre: p.title, url: p.url, prix: p.prix, prixBase: p.prixBase } : null;
+  } catch (e) { return null; }
+}
+
 // Okkazeo sépare un même jeu en plusieurs éditions (même titre, ids différents) : on additionne celles qui ont des annonces.
 async function okkazeo() {
   let recherche = liens.okkazeo, cands = [], p = null;
@@ -170,16 +178,17 @@ async function ficheBgg() {
   return { duo, rejouabilite: pickRejouabilite(base, dyn && dyn.item && dyn.item.stats) };
 }
 
-const [ej, ph, ok, ml, sim, du] = await Promise.allSettled([
+const [ej, ph, ok, ml, sim, du, lf] = await Promise.allSettled([
   boutique(liens.espritjeu, parseEspritJeuSearch, 'latin1', parEdEspritJeu),
   boutique(liens.philibert, parsePhilibertSearch, undefined, parEdPhilibert),
   okkazeo(),
   myludo(),
   recsBgg(),
   ficheBgg(),
+  ludifolie(),
 ]);
 const val = r => (r.status === 'fulfilled' ? r.value : null);
 // Lien direct vers la page BoardGameGeek, lu dans la fiche Okkazeo (null si inconnu : la page propose alors la recherche BGG).
 const bggUrl = (val(ok) || {}).bggUrl || null;
 const erreurs = [ej, ph, ok, ml, sim].map((r, i) => r.status === 'rejected' ? `${['espritjeu', 'philibert', 'okkazeo', 'myludo', 'bgg-recs'][i]}: ${(r.reason && r.reason.message) || String(r.reason)}` : null).filter(Boolean);
-return [{ json: { query: q, espritjeu: val(ej), philibert: val(ph), bgg, okkazeo: val(ok), myludo: val(ml), similaires: val(sim), editeurOk: !!((val(ml) || {}).editeurOk || (bgg && bgg.editeurOk)), duo: (val(du) || {}).duo || null, rejouabilite: (val(du) || {}).rejouabilite || null, bggUrl, liens, erreurs } }];
+return [{ json: { query: q, espritjeu: val(ej), philibert: val(ph), ludifolie: val(lf), bgg, okkazeo: val(ok), myludo: val(ml), similaires: val(sim), editeurOk: !!((val(ml) || {}).editeurOk || (bgg && bgg.editeurOk)), duo: (val(du) || {}).duo || null, rejouabilite: (val(du) || {}).rejouabilite || null, bggUrl, liens, erreurs } }];

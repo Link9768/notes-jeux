@@ -95,6 +95,7 @@ button.chip:hover,button.chip.on{background:var(--bgg);color:#fff}
 .vid{display:flex;gap:10px;align-items:center;text-decoration:none;color:var(--txt)}
 .vid img{width:120px;height:68px;object-fit:cover;border-radius:8px;flex-shrink:0;background:var(--line)}
 .addl{margin-top:6px}
+.lrow{display:flex;flex-wrap:wrap;align-items:flex-start;gap:6px 14px}.neuf{margin-top:6px;font-size:12px;color:var(--mut)}
 .addl summary{cursor:pointer;font-size:12px;color:var(--mut);display:inline-block}
 .addl .chips{margin-top:6px}
 .nvlw{display:flex;gap:6px;margin-top:8px}
@@ -395,10 +396,18 @@ function liens(d, games) {
   return bggUrl ? ext(bggUrl, 'Ouvrir sur BoardGameGeek ↗') : ext(d.liens.bgg, 'Chercher sur BoardGameGeek ↗');
 }
 
-// Prix neuf de référence : le moins cher d'Esprit Jeu et Philibert (null si aucun).
-function prixNeuf(d) {
-  const p = [d && d.espritjeu && d.espritjeu.prix, d && d.philibert && d.philibert.prix].filter(x => x != null);
-  return p.length ? Math.min(...p) : null;
+// Prix neuf de référence : le moins cher d'Esprit Jeu, Philibert et Ludifolie (null si aucun), avec la boutique.
+function meilleurNeuf(d) {
+  const c = [['Esprit Jeu', d && d.espritjeu], ['Philibert', d && d.philibert], ['Ludifolie', d && d.ludifolie]].filter(([, s]) => s && s.prix != null);
+  return c.length ? c.reduce((m, x) => (x[1].prix < m[1].prix ? x : m)) : null;
+}
+const prixNeuf = d => { const m = meilleurNeuf(d); return m ? m[1].prix : null; };
+// À côté de « ＋ Liste » : neuf dès X € (boutique) ; prix de base barré de Ludifolie (prix catalogue, au plus proche d'un prix public).
+function neufHtml(d) {
+  const m = meilleurNeuf(d);
+  if (!m) return '';
+  const base = d.ludifolie && d.ludifolie.prixBase;
+  return `<span class="neuf" title="Prix du jour, pas le prix de sortie">💶 Neuf dès ${fr(m[1].prix)} € · ${m[0]}${base ? ` · prix de base ${fr(base)} €` : ''}</span>`;
 }
 // Écart occasion / neuf : « −45 % » (vert ≤ −30 %, orange ≤ −10 %, gris sinon).
 function dealTag(prix, neuf) {
@@ -624,7 +633,7 @@ const champListe = '<div class="nvlw"><input class="nvl" maxlength="40" placehol
 // « ＋ Liste » sous le titre du jeu : une pastille par liste (verte si le jeu y est), clic = ajouter / retirer.
 function listesMenu(d) {
   const t = titreJeu(d);
-  return `<details class="addl"><summary>＋ Liste</summary><div class="chips">${listes.map(l => `<button type="button" class="chip${dansListe(l.nom, t) ? ' on' : ''}" data-liste="${esc(l.nom)}">${esc(l.nom)}</button>`).join('')}</div>${champListe}</details>`;
+  return `<div class="lrow"><details class="addl"><summary>＋ Liste</summary><div class="chips">${listes.map(l => `<button type="button" class="chip${dansListe(l.nom, t) ? ' on' : ''}" data-liste="${esc(l.nom)}">${esc(l.nom)}</button>`).join('')}</div>${champListe}</details>${neufHtml(d)}</div>`;
 }
 // Écran « Mes listes » : jeux cliquables (ouverts comme un 🔍), ✕ pour retirer, 🛒 vers le matchmaking, suppression des listes créées.
 function listesHtml() {

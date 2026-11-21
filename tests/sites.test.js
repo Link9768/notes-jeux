@@ -58,3 +58,13 @@ test('pages sans résultat → []', () => {
   assert.deepEqual(parseEspritJeuSearch('<html></html>'), []);
   assert.deepEqual(parseOkkazeoSearch('<html></html>'), []);
 });
+
+test('Ludifolie : cartes de la recherche → titre, prix du jour et prix de base (page réelle du 2026-11-21)', () => {
+  const { parseLudifolieSearch } = require('../lib/sites.js');
+  const r = parseLudifolieSearch(require('node:fs').readFileSync(`${__dirname}/fixtures/ludifolie-search-clank.html`, 'utf8'));
+  assert.ok(r.length >= 5);
+  const e = r.find(x => /Espace/.test(x.title));
+  assert.deepEqual([e.title, e.url, e.prix], ["Clank! Dans l'Espace", 'https://www.ludifolie.com/6573-clank-dans-l-espace.html', 51.9]);
+  assert.ok(r.every(x => x.prix > 0));
+  assert.ok(r.some(x => x.prixBase > x.prix), 'une carte remisée a un prix de base plus haut');
+});

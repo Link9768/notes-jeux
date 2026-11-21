@@ -216,7 +216,7 @@ test('encart « Les joueurs aiment aussi » : recommandations BGG avec note et b
 });
 
 // ---- v2 : rang, idéal, extensions, mécaniques cliquables, bonne affaire, comparateur, onglets ajoutés par 🔍
-const front2 = vm.runInNewContext(`${script}; ({ bggCard, okk, comparerHtml, dealTag, prixNeuf, tile })`, {
+const front2 = vm.runInNewContext(`${script}; ({ bggCard, okk, comparerHtml, dealTag, prixNeuf, neufHtml, tile })`, {
   document: { querySelector: el }, location: { search: '' }, history: {}, fetch: async () => { throw new Error('pas de réseau'); }, URLSearchParams,
 });
 const bggV2 = over => ({ query: 'abyss', myludo: { titre: 'Abyss' }, liens: { bgg: '#' }, bgg: { id: '155987', note: 7.3, votes: 17096, duree: '30–60', joueurs: '2–4', poids: 2.31, annee: 2014,
@@ -231,6 +231,10 @@ test('encart BGG v2 : rang général + catégorie, idéal à, pastille Extension
 test('bonne affaire : écart au neuf le moins cher (Esprit Jeu / Philibert), couleur selon l’écart', () => {
   assert.equal(front2.prixNeuf({ espritjeu: { prix: 54 }, philibert: { prix: 57.9 } }), 54);
   assert.equal(front2.prixNeuf({ espritjeu: null, philibert: { prix: null } }), null);
+  assert.equal(front2.prixNeuf({ espritjeu: { prix: 54 }, philibert: { prix: 57.9 }, ludifolie: { prix: 48.6, prixBase: 54 } }), 48.6);
+  const nh = front2.neufHtml({ espritjeu: { prix: 54 }, ludifolie: { prix: 48.6, prixBase: 54 } });
+  assert.ok(nh.includes('Neuf dès 48,6 € · Ludifolie') && nh.includes('prix de base 54 €'), nh);
+  assert.equal(front2.neufHtml({}), '');
   assert.ok(front2.dealTag(30, 54).includes('deal top') && front2.dealTag(30, 54).includes('−44 %'));
   assert.ok(front2.dealTag(45, 54).includes('deal moy'));
   assert.ok(front2.dealTag(60, 54).includes('deal bof') && front2.dealTag(60, 54).includes('+11 %'));
