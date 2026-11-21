@@ -67,3 +67,17 @@ test('rythme du matchmaking Okkazeo : même débit de 16 à 300 jeux (0,4 s, 2 j
   assert.deepEqual(rythmePanier(15), { pauseMs: 0, ouvriers: 3 });
   for (const n of [16, 50, 51, 100, 300]) assert.deepEqual(rythmePanier(n), { pauseMs: 400, ouvriers: 2 }, String(n));
 });
+
+test('jeux à sécuriser : seuls les vendeurs qui ont TOUS les jeux requis, classés par nombre de jeux de la liste', () => {
+  const jeux = [
+    { titre: 'A', annonces: [ann('X', 10), ann('Y', 11), ann('Z', 12)] },
+    { titre: 'B', annonces: [ann('X', 20), ann('Y', 21)] },
+    { titre: 'C', annonces: [ann('X', 30), ann('Z', 31)] },
+    { titre: 'D', annonces: [ann('Y', 40)] },
+  ];
+  const v = matchVendeurs(jeux, CPS, 10, ['A', 'B']);
+  assert.deepEqual(v.map(x => [x.vendeur, x.nbJeux]), [['X', 3], ['Y', 3]], 'X et Y ont A et B ; Z n a pas B');
+  assert.deepEqual(matchVendeurs(jeux, CPS, 10, ['B', 'C']).map(x => x.vendeur), ['X']);
+  assert.deepEqual(matchVendeurs(jeux, CPS, 10, ['C', 'D']), []);
+  assert.equal(matchVendeurs(jeux, CPS).length, 3, 'sans requis : comportement inchangé (au moins 2 jeux)');
+});

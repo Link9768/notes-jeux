@@ -130,6 +130,7 @@ button.chip:hover,button.chip.on{background:var(--bgg);color:#fff}
 .panier button#plbc{background:#ec5a13}
 .panier .bts{display:flex;flex-direction:column;gap:8px}
 .panier details{padding:0 12px 12px;font-size:12px;color:var(--mut)}
+.panier #ps{width:100%;box-sizing:border-box;margin:6px 0}
 .panier details input{width:100%;box-sizing:border-box;margin:6px 0}
 #pr{padding:0 12px 12px;display:grid;gap:10px}
 .vend{border:1px solid var(--line);border-radius:10px;padding:10px}
@@ -149,7 +150,7 @@ button.chip:hover,button.chip.on{background:var(--bgg);color:#fff}
   <div id="out" aria-live="polite"></div>
   <section class="panier">
     <header><b>Matchmaking Okkazeo</b><span>vendeurs qui ont plusieurs jeux de ta liste</span></header>
-    <form id="pf"><textarea id="pj" rows="4" aria-label="Jeux recherchés, un par ligne" placeholder="Un jeu par ligne (2 à 300)&#10;7 Wonders Duel&#10;Carcassonne&#10;Azul"></textarea><div class="bts"><button>Chercher les vendeurs</button><button type="button" id="plbc">Leboncoin</button></div></form>
+    <form id="pf"><textarea id="pj" rows="4" aria-label="Jeux recherchés, un par ligne" placeholder="Un jeu par ligne (2 à 300)&#10;7 Wonders Duel&#10;Carcassonne&#10;Azul"></textarea><input id="ps" maxlength="200" aria-label="Jeux à sécuriser, séparés par des virgules" placeholder="🔒 À sécuriser (2 à 3 jeux, séparés par des virgules) : vendeurs qui les ont tous"><div class="bts"><button>Chercher les vendeurs</button><button type="button" id="plbc">Leboncoin</button></div></form>
     <details><summary>Installer le favori Matchmaking LBC</summary>
       <p><a href="javascript:(()=>{const s=document.createElement('script');s.src='https://link9768.github.io/notes-jeux/lbc.js?'+Date.now();document.body.appendChild(s)})()">Matchmaking LBC</a></p>
       <input readonly value="javascript:(()=>{const s=document.createElement('script');s.src='https://link9768.github.io/notes-jeux/lbc.js?'+Date.now();document.body.appendChild(s)})()" aria-label="Code du favori">
@@ -1027,14 +1028,22 @@ function panierHtml(p) {
   const jeux = (p.jeux || []).map((j, i) => ({ j, i })).sort((a, b) => (b.j.titre ? b.j.annonces || 0 : -1) - (a.j.titre ? a.j.annonces || 0 : -1) || a.i - b.i).map(({ j }) => j).map(j => (j.titre
     ? `<span class="chip">${extNouv(j.url, esc(j.titre))} · ${j.annonces} annonce${j.annonces > 1 ? 's' : ''}</span>`
     : `<span class="chip th">${esc(j.demande)} : introuvable sur Okkazeo</span>`)).join('');
+  const carte = v => `<div class="vend"><div class="top"><b>${esc(v.vendeur)}</b><span class="mut">${esc(v.ville ?? '')}${v.cp ? ` (${esc(v.cp)})` : ''}${v.nbAnnonces ? ` · ${v.nbAnnonces} annonce${v.nbAnnonces > 1 ? 's' : ''} en tout` : ''}</span>${v.procheParis ? '<span class="tag ok">près de Paris</span>' : ''}${v.envoi ? '<span class="tag">envoi</span>' : ''}<span class="right"><b>${v.nbJeux} jeux</b> · ${fr(v.total)} €</span></div>${v.annonces.map(a => `<div class="ann2"><span>${esc(a.jeu)} <span class="mut">${esc(a.etat ?? '')}</span></span><span>${fr(a.prix)} € ${a.url ? extNouv(a.url, 'annonce ↗') : ''}</span></div>`).join('')}</div>`;
   const vendeurs = (p.vendeurs || []).length
-    ? p.vendeurs.map(v => `<div class="vend"><div class="top"><b>${esc(v.vendeur)}</b><span class="mut">${esc(v.ville ?? '')}${v.cp ? ` (${esc(v.cp)})` : ''}${v.nbAnnonces ? ` · ${v.nbAnnonces} annonce${v.nbAnnonces > 1 ? 's' : ''} en tout` : ''}</span>${v.procheParis ? '<span class="tag ok">près de Paris</span>' : ''}${v.envoi ? '<span class="tag">envoi</span>' : ''}<span class="right"><b>${v.nbJeux} jeux</b> · ${fr(v.total)} €</span></div>${v.annonces.map(a => `<div class="ann2"><span>${esc(a.jeu)} <span class="mut">${esc(a.etat ?? '')}</span></span><span>${fr(a.prix)} € ${a.url ? extNouv(a.url, 'annonce ↗') : ''}</span></div>`).join('')}</div>`).join('')
+    ? p.vendeurs.map(carte).join('')
     : '<p class="na">Aucun vendeur ne propose au moins 2 de ces jeux.</p>';
+  // Encart « jeux sécurisés » : vendeurs qui ont TOUS les jeux à sécuriser, avec les autres jeux de la liste (même tri que les autres).
+  const s = p.securises;
+  const securises = !s ? '' : `<h3 class="titre-l">🔒 Vendeurs qui ont tes jeux à sécuriser</h3>${
+    (s.introuvables || []).length ? `<p class="na">${(p.erreurs || []).length ? 'Okkazeo ne répond pas pour' : 'Introuvable sur Okkazeo :'} ${s.introuvables.map(esc).join(', ')}. ${(p.erreurs || []).length ? 'Réessaie plus tard.' : "Vérifie l'orthographe."}</p>`
+      : (s.vendeurs || []).length ? `<p class="mut">${(s.jeux || []).map(esc).join(' + ')}, avec le plus de jeux de ta liste</p>${s.vendeurs.map(carte).join('')}`
+        : `<p class="na">Aucun vendeur n'a à la fois ${(s.jeux || []).map(esc).join(' et ')}.</p>`}`;
   const err = (p.erreurs || []).length ? `<p class="mut">Problème : ${esc(p.erreurs.join(' · '))}</p>` : '';
-  return `<div class="chips">${jeux}</div>${vendeurs}${err}`;
+  return `<div class="chips">${jeux}</div>${securises}${securises ? '<h3 class="titre-l">Autres vendeurs</h3>' : ''}${vendeurs}${err}`;
 }
 
 const jeuxSaisis = () => $('#pj').value.split(/[\n,;|]+/).map(x => x.trim()).filter(Boolean);
+const secuSaisie = () => $('#ps').value.split(/[\n,;|]+/).map(x => x.trim()).filter(Boolean).slice(0, 3);
 // Matchmaking Leboncoin : le favori lbc.js lit la liste dans le hash de l'onglet ouvert ici.
 const lbcUrl = jeux => 'https://www.leboncoin.fr/recherche?category=41#nj=' + encodeURIComponent(jeux.slice(0, 300).join('|'));
 $('#plbc').addEventListener('click', () => {
@@ -1045,7 +1054,9 @@ $('#plbc').addEventListener('click', () => {
 
 $('#pf').addEventListener('submit', async e => {
   e.preventDefault();
-  const jeux = jeuxSaisis();
+  // Jeux à sécuriser (3 au plus) : cherchés avec la liste, en tête (donc dans le 1er paquet de 50) ; le serveur renvoie les vendeurs qui les ont tous.
+  const secu = secuSaisie(), vus = new Set();
+  const jeux = secu.concat(jeuxSaisis()).filter(j => { const k = j.toLowerCase(); return vus.has(k) ? false : vus.add(k); });
   if (jeux.length < 2) { $('#pr').innerHTML = '<p class="na">Mets au moins 2 jeux (un par ligne).</p>'; return; }
   // Le workflow espace ses requêtes Okkazeo (anti-bannissement, voir rythmePanier) : ~1,2 s par jeu jamais cherché dans l'heure,
   // quelle que soit la taille de la liste (même débit à 300 jeux, durée multipliée). Au-delà de 50, des appels par paquets de 50 (les 50 premiers, puis les 100…, jusqu'à la liste
@@ -1058,7 +1069,7 @@ $('#pf').addEventListener('submit', async e => {
   attente();
   const minuteur = setInterval(attente, 1000);
   const appel = async l => {
-    const r = await fetch(API_PANIER + '?jeux=' + encodeURIComponent(l.join('|')));
+    const r = await fetch(API_PANIER + '?jeux=' + encodeURIComponent(l.join('|')) + (secu.length ? '&secu=' + encodeURIComponent(secu.join('|')) : ''));
     if (!r.ok) throw new Error('HTTP ' + r.status);
     return r.json();
   };

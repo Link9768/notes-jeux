@@ -142,6 +142,13 @@ test('matchmaking : jeux trouvés ou non, vendeur avec ses annonces cliquables, 
 });
 test('matchmaking : aucun vendeur commun → message ; erreurs affichées ; texte échappé', () => {
   assert.ok(front.panierHtml({ ...panier, vendeurs: [] }).includes('Aucun vendeur ne propose au moins 2 de ces jeux'));
+  const vs = panier.vendeurs[0];
+  const hs = front.panierHtml({ ...panier, securises: { jeux: ['Clank!', 'Azul'], introuvables: [], vendeurs: [vs] } });
+  assert.ok(hs.includes('Vendeurs qui ont tes jeux à sécuriser') && hs.includes('Clank! + Azul') && hs.includes('Autres vendeurs'));
+  assert.ok(front.panierHtml({ ...panier, securises: { jeux: ['Clank!', 'Azul'], introuvables: [], vendeurs: [] } }).includes("Aucun vendeur n'a à la fois Clank! et Azul"));
+  assert.ok(front.panierHtml({ ...panier, securises: { jeux: [], introuvables: ['Zzz'], vendeurs: [] } }).includes('Introuvable sur Okkazeo : Zzz'));
+  assert.ok(front.panierHtml({ ...panier, erreurs: ['Zzz: page de recherche inattendue'], securises: { jeux: [], introuvables: ['Zzz'], vendeurs: [] } }).includes('Okkazeo ne répond pas pour Zzz'));
+  assert.ok(!front.panierHtml(panier).includes('sécuriser'));
   assert.ok(front.panierHtml({ ...panier, erreurs: ['azul: HTTP 403'] }).includes('azul: HTTP 403'));
   assert.ok(!front.panierHtml({ ...panier, vendeurs: [{ ...panier.vendeurs[0], vendeur: '<img src=x>' }] }).includes('<img src=x>'));
 });

@@ -242,6 +242,18 @@ test('panier : vendeurs qui ont plusieurs jeux de la liste (Alice et Bob ont Cla
   assert.deepEqual(out.erreurs, []);
   assert.ok(calls.every(c => c.headers['Sec-Fetch-Dest'] === 'document' && c.timeout === 10000));
 });
+test('panier : jeux à sécuriser (secu) → encart des vendeurs qui ont tous ces jeux ; introuvable signalé', async () => {
+  const q = secu => ({ Webhook: { query: { jeux: 'azertyuiop', secu } } });
+  const a = await run('panier', { nodes: q('clank|dixit: odyssey'), http: panierHttp });
+  assert.deepEqual(a.out.securises.jeux.sort(), ['Clank!', 'Dixit Odyssey']);
+  assert.deepEqual(a.out.securises.vendeurs.map(v => v.vendeur).sort(), ['Alice', 'Bob']);
+  assert.ok(a.out.securises.vendeurs.every(v => v.nbAnnonces === 35));
+  const z = await run('panier', { nodes: q('clank|azertyuiop'), http: panierHttp });
+  assert.deepEqual(z.out.securises.introuvables, ['azertyuiop']);
+  assert.deepEqual(z.out.securises.vendeurs, []);
+  const sans = await run('panier', { nodes: panierNodes('clank|dixit: odyssey'), http: panierHttp });
+  assert.equal(sans.out.securises, undefined);
+});
 test('panier : un jeu en panne (403) → erreur pour ce jeu, les autres servent', async () => {
   const { out } = await run('panier', { nodes: panierNodes('clank|dixit: odyssey'), http: o => (o.url === OK_DIXIT ? { statusCode: 403, body: '' } : panierHttp(o)) });
   assert.equal(out.jeux[0].annonces, 14);

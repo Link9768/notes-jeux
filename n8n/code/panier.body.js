@@ -1,5 +1,7 @@
 // Matchmaking Okkazeo : GET ?jeux=Clank|Abyss|… → vendeurs qui proposent au moins 2 de ces jeux (voir lib/panier.js).
-const noms = parseListeJeux($('Webhook').first().json.query.jeux);
+// secu = jeux « à sécuriser » (3 au plus, aussi cherchés comme les autres) : l'encart « sécurisés » ne garde que les vendeurs qui ont TOUS ces jeux.
+const secu = parseListeJeux($('Webhook').first().json.query.secu, 3);
+const noms = parseListeJeux(secu.concat(parseListeJeux($('Webhook').first().json.query.jeux)).join('|'));
 if (noms.length < 2) return [{ json: { jeux: noms.map(demande => ({ demande, titre: null, url: null, annonces: 0 })), vendeurs: [], erreurs: ['au moins 2 jeux'] } }];
 
 // Okkazeo refuse (403) le User-Agent seul : il faut les en-têtes d'un vrai navigateur (mêmes en-têtes que le node Sources).
@@ -70,15 +72,25 @@ await Promise.all(Array.from({ length: OUVRIERS }, async () => {
     try { jeux[i] = await unJeuMemo(noms[i]); } catch (e) { jeux[i] = { demande: noms[i], titre: null, url: null, annonces: [], erreur: msg(e) }; }
   }
 }));
-const vendeurs = matchVendeurs(jeux.filter(j => j.titre), CP_PARIS);
+const trouves = jeux.filter(j => j.titre);
+const vendeurs = matchVendeurs(trouves, CP_PARIS);
+const secuNorm = new Set(secu.map(s => normalize(s)));
+const requis = trouves.filter(j => secuNorm.has(normalize(j.demande))).map(j => j.titre);
+const introuvables = jeux.filter(j => !j.titre && secuNorm.has(normalize(j.demande))).map(j => j.demande);
+const securises = secu.length && !introuvables.length ? matchVendeurs(trouves, CP_PARIS, 10, requis) : [];
 // Total d'annonces de chaque vendeur affiché : lu sur la page de sa 1re annonce (une requête par vendeur, au même rythme ; mémoire d'1 h).
-await Promise.all(vendeurs.map(async v => {
-  const url = v.annonces.find(a => a.url) && v.annonces.find(a => a.url).url;
-  if (!url) return;
+const nbParUrl = new Map(); // un vendeur présent dans les deux listes (sécurisés et autres) n'est lu qu'une fois
+const nbPour = url => nbParUrl.get(url) || nbParUrl.set(url, (async () => {
   const k = 'nb:' + url, m = memoire[k];
-  if (m) { v.nbAnnonces = m.v; return; }
-  try { v.nbAnnonces = nbAnnoncesVendeur(await get(url)); } catch (e) { v.nbAnnonces = null; }
-  memoire[k] = { t: Date.now(), v: v.nbAnnonces };
+  if (m) return m.v;
+  let nb = null;
+  try { nb = nbAnnoncesVendeur(await get(url)); } catch (e) { nb = null; }
+  memoire[k] = { t: Date.now(), v: nb };
+  return nb;
+})()).get(url);
+await Promise.all(vendeurs.concat(securises).map(async v => {
+  const a = v.annonces.find(x => x.url);
+  if (a) v.nbAnnonces = await nbPour(a.url);
 }));
 const erreurs = jeux.filter(j => j.erreur).map(j => `${j.demande}: ${j.erreur}`);
-return [{ json: { jeux: jeux.map(j => ({ demande: j.demande, titre: j.titre, url: j.url, annonces: j.annonces.length })), vendeurs, erreurs } }];
+return [{ json: { jeux: jeux.map(j => ({ demande: j.demande, titre: j.titre, url: j.url, annonces: j.annonces.length })), vendeurs, ...(secu.length ? { securises: { jeux: requis, introuvables, vendeurs: securises } } : {}), erreurs } }];
