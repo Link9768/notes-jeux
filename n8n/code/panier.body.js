@@ -71,5 +71,14 @@ await Promise.all(Array.from({ length: OUVRIERS }, async () => {
   }
 }));
 const vendeurs = matchVendeurs(jeux.filter(j => j.titre), CP_PARIS);
+// Total d'annonces de chaque vendeur affiché : lu sur la page de sa 1re annonce (une requête par vendeur, au même rythme ; mémoire d'1 h).
+await Promise.all(vendeurs.map(async v => {
+  const url = v.annonces.find(a => a.url) && v.annonces.find(a => a.url).url;
+  if (!url) return;
+  const k = 'nb:' + url, m = memoire[k];
+  if (m) { v.nbAnnonces = m.v; return; }
+  try { v.nbAnnonces = nbAnnoncesVendeur(await get(url)); } catch (e) { v.nbAnnonces = null; }
+  memoire[k] = { t: Date.now(), v: v.nbAnnonces };
+}));
 const erreurs = jeux.filter(j => j.erreur).map(j => `${j.demande}: ${j.erreur}`);
 return [{ json: { jeux: jeux.map(j => ({ demande: j.demande, titre: j.titre, url: j.url, annonces: j.annonces.length })), vendeurs, erreurs } }];

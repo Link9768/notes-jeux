@@ -227,6 +227,7 @@ const panierHttp = o => {
     'https://www.okkazeo.com/jeux/90287/dixit-odyssey': renomme(fx('okkazeo-dixit-90287.html'), ['Bob']),
     'https://www.okkazeo.com/jeux/resultats?rech_nom=azertyuiop': fx('okkazeo-search-vide.html'),
   };
+  if (o.url.includes('/annonces/')) return { statusCode: 200, body: '<a href="/membres/X/annonces"><span class="nb_annonces"><i class="fas fa-tags"></i> 35</span> annonces en ligne</a>' }; // page d'annonce : total du vendeur
   return o.url in pages ? { statusCode: 200, body: pages[o.url] } : { statusCode: 404, body: '' };
 };
 const panierNodes = jeux => ({ Webhook: { query: { jeux } } });
@@ -237,6 +238,7 @@ test('panier : vendeurs qui ont plusieurs jeux de la liste (Alice et Bob ont Cla
   assert.deepEqual(out.vendeurs[0].annonces.map(a => a.jeu).sort(), ['Clank!', 'Dixit Odyssey']);
   assert.deepEqual(out.jeux.map(j => [j.demande, j.titre, j.annonces]), [['clank', 'Clank!', 14], ['dixit: odyssey', 'Dixit Odyssey', out.jeux[1].annonces], ['azertyuiop', null, 0]]);
   assert.ok(out.jeux[1].annonces > 0);
+  assert.ok(out.vendeurs.every(v => v.nbAnnonces === 35), "total d'annonces du vendeur");
   assert.deepEqual(out.erreurs, []);
   assert.ok(calls.every(c => c.headers['Sec-Fetch-Dest'] === 'document' && c.timeout === 10000));
 });

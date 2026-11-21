@@ -40,6 +40,13 @@ test('vendeurs : aucun vendeur commun → liste vide ; envoi seulement si toutes
   assert.equal(v[0].envoi, false);
   assert.deepEqual(matchVendeurs([], CPS), []);
 });
+test("total d'annonces d'un vendeur lu sur la page d'une annonce", () => {
+  const { nbAnnoncesVendeur } = require('../lib/panier.js');
+  assert.equal(nbAnnoncesVendeur('<a href="/membres/QZ/annonces"><span class="nb_annonces"><i class="fas fa-fw fa-tags"></i> 3</span> annonces en ligne</a>'), 3);
+  assert.equal(nbAnnoncesVendeur('<span class="nb_annonces">12</span> annonce en ligne'), 12);
+  assert.equal(nbAnnoncesVendeur('<html></html>'), null);
+});
+
 test('liste de jeux : virgules, retours à la ligne ou |, doublons et vides retirés, 300 au plus', () => {
   assert.deepEqual(parseListeJeux('Clank, Abyss\n\nclank|7 Wonders Duel ; '), ['Clank', 'Abyss', '7 Wonders Duel']);
   assert.equal(parseListeJeux(Array.from({ length: 320 }, (_, i) => 'j' + i).join(',')).length, 300);
