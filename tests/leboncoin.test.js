@@ -170,3 +170,12 @@ test('lot : prix de chaque jeu (annonce du même vendeur, sinon description), to
   assert.equal(p.total, 12);
   assert.ok(panneauHtml({ fait: 1, total: 1, jeux: [], vendeurs: [], lots: [{ titre: 'L', url: '', prix: 15, jeux: ['Azul', 'Clank'], ...p }] }).includes('1 prix sur 2'));
 });
+
+test('lots écartés : location et goodies (cas réels du 2026-11-21)', () => {
+  const { lotHorsSujet } = require('../lib/leboncoin.js');
+  assert.ok(lotHorsSujet('Jeux de société bien lire', 'Je loue mes jeux : Just One, TTMC, 4 € la semaine'));
+  assert.ok(lotHorsSujet('Location jeux de société', ''));
+  assert.ok(lotHorsSujet('Goodies de jeux de société à vendre', 'Bunny Kingdom, Dorf Romantik'));
+  assert.ok(lotHorsSujet('Inserts pour jeux', 'Azul, Clank'));
+  assert.ok(!lotHorsSujet('Lot de jeux de société', 'Azul 12€, Clank 20€'));
+});

@@ -131,14 +131,16 @@
       maj(`Lecture des lots : ${i + 1}/${aLire.length}…`);
       try {
         const { trouves, texte } = await confirmeLot(c.lot, liste);
-        if (trouves.length >= 2) {
+        // location ou goodies écartés ; lot sans aucun prix par jeu = presque toujours une location : écarté aussi
+        if (trouves.length >= 2 && !lotHorsSujet(c.lot.titre, texte)) {
           // annonce du même vendeur pour un jeu (la moins chère), déjà vue dans les recherches : prix réel de ce jeu
           const duVendeur = j => {
             const x = jeux.find(y => y.demande === j);
             const m = ((x && x.annonces) || []).filter(a => c.lot.cle && a.cle === c.lot.cle && a.url !== c.lot.url).sort((a, b) => a.prix - b.prix)[0];
             return m ? { prix: m.prix, url: m.url } : null;
           };
-          lots = [...lots, { ...c.lot, jeux: trouves, ...detailLot(texte, trouves, duVendeur), procheParis: CP_PARIS.includes(c.lot.cp) }].sort((a, b) => b.jeux.length - a.jeux.length);
+          const det = detailLot(texte, trouves, duVendeur);
+          if (det.detail.some(d => d.prix != null)) lots = [...lots, { ...c.lot, jeux: trouves, ...det, procheParis: CP_PARIS.includes(c.lot.cp) }].sort((a, b) => b.jeux.length - a.jeux.length);
         }
       } catch (e) { if (e === CAPTCHA) return captcha(); }
     }
