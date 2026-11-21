@@ -191,3 +191,7 @@ Petite icône `🛒` (id `versToutes`, visible dès 2 jeux, infobulle « Envoyer
 ## Matchmaking : jeux classés par nombre d'annonces (2026-11-20)
 
 `panierHtml` classe la liste des jeux (puces « Jeu · N annonces ») du plus d'annonces au moins (à égalité : ordre de la liste), les jeux « introuvable sur Okkazeo » en dernier. Les vendeurs gardent leur tri (nombre de jeux, près de Paris, total).
+
+## Listes jusqu'à 300 jeux (2026-11-21)
+
+Matchmaking Okkazeo et favori Leboncoin passent de 100 à **300 jeux** (`parseListeJeux`, `lbcUrl`). Débit inchangé (Okkazeo 2 jeux à la fois, 0,4 s entre deux requêtes ; Leboncoin 1–1,5 s entre deux pages). La page appelle le webhook par **paquets de 50** cumulés (50, 100… jusqu'à la liste entière : « étape k/N »), chaque appel retrouvant les précédents dans la mémoire d'1 h du workflow. Durée estimée : Okkazeo ≈ 6 min pour 300 jeux jamais cherchés, Leboncoin ≈ 20 min (~4 s par jeu). URL de 9 000 caractères acceptée par le webhook (vérifié) ; 300 titres en font ~7 000.

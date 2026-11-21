@@ -13,8 +13,8 @@ const BROWSER = {
   'sec-ch-ua-mobile': '?0', 'sec-ch-ua-platform': '"Windows"',
   'Accept-Encoding': 'gzip, deflate, br', 'Referer': 'https://www.google.com/',
 };
-// Deux vitesses (rythmePanier, lib/panier.js) : jusqu'à 15 jeux, rythme normal ; au-delà (100 au plus), 2 jeux à la fois et
-// 0,4 s entre deux requêtes Okkazeo (garde-fou anti-bannissement : même débit à 20 ou à 100 jeux).
+// Deux vitesses (rythmePanier, lib/panier.js) : jusqu'à 15 jeux, rythme normal ; au-delà (300 au plus), 2 jeux à la fois et
+// 0,4 s entre deux requêtes Okkazeo (garde-fou anti-bannissement : même débit à 20 ou à 300 jeux).
 const { pauseMs: PAUSE_MS, ouvriers: OUVRIERS } = rythmePanier(noms.length);
 let prochain = 0;
 const attendre = async () => {
