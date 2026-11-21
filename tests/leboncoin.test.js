@@ -115,7 +115,7 @@ test('lots : candidats = annonces de la recherche dont le titre ne nomme pas le 
     { list_id: 2, subject: 'Just One', price: [10], url: 'u2', location: {}, owner: {} },
     { list_id: 3, subject: 'Jeu PS4 lot', price: [10], url: 'u3', location: {}, owner: {} },
     { list_id: 4, subject: 'Sans prix', url: 'u4', location: {}, owner: {} } ] };
-  assert.deepEqual(JSON.parse(JSON.stringify(lotsCandidats(sd, 'Just One'))), [{ id: '1', titre: 'Jeux de société modernes', url: 'https://www.leboncoin.fr/ad/jeux_jouets/1', prix: 5, ville: 'Lyon', cp: '69001', vendeur: 'a' }]);
+  assert.deepEqual(JSON.parse(JSON.stringify(lotsCandidats(sd, 'Just One'))), [{ id: '1', titre: 'Jeux de société modernes', url: 'https://www.leboncoin.fr/ad/jeux_jouets/1', prix: 5, ville: 'Lyon', cp: '69001', vendeur: 'a', cle: 'u1' }]);
 });
 test('panneau : encart « Lots qui contiennent plusieurs de tes jeux », trié, échappé', () => {
   const h = panneauHtml({ fait: 2, total: 2, jeux: [], vendeurs: [], lots: [{ titre: 'Lot <b>', url: 'https://www.leboncoin.fr/ad/jeux_jouets/1', prix: 120, ville: 'Paris', cp: '75015', procheParis: true, jeux: ['Just One', 'TTMC'] }] });
@@ -155,4 +155,18 @@ test('annonces vendues ou en cours d\'achat écartées (cas réel : Akropolis de
   // Un lot vendu n'est pas lu non plus (la description coûte une requête).
   const lot = (id, statut) => ({ ...ad(id, statut), subject: 'Lot de jeux de société' });
   assert.deepEqual(lotsCandidats({ ads: [lot(4, null), lot(5, 'sold')] }, 'Akropolis').map(l => l.id), ['4']);
+});
+
+test('lot : prix de chaque jeu (annonce du même vendeur, sinon description), total = somme, prix du lot ignoré', () => {
+  const { prixDesJeux, detailLot } = require('../lib/leboncoin.js');
+  const txt = 'Lot 15€ : Azul 12€\nClank - 20 euros\nSplendor 8,50 €, Abyss';
+  assert.deepEqual(prixDesJeux(txt, ['Azul', 'Clank', 'Splendor', 'Abyss']), { Azul: 12, Clank: 20, Splendor: 8.5 });
+  const d = detailLot(txt, ['Azul', 'Clank', 'Abyss'], j => j === 'Abyss' ? { prix: 25, url: 'https://www.leboncoin.fr/ad/x/2' } : null);
+  assert.deepEqual(d.detail.map(x => [x.jeu, x.prix, x.source]), [['Azul', 12, 'description'], ['Clank', 20, 'description'], ['Abyss', 25, 'annonce']]);
+  assert.equal(d.total, 57);
+  const h = panneauHtml({ fait: 2, total: 2, jeux: [], vendeurs: [], lots: [{ titre: 'Lot', url: 'https://www.leboncoin.fr/ad/x/1', prix: 15, ville: 'V', cp: '1', jeux: ['Azul', 'Clank', 'Abyss'], ...d }] });
+  assert.ok(h.includes('total 57 €') && h.includes('12 €') && h.includes('25 €') && h.includes('affichée à 15 €'), h);
+  const p = detailLot('Azul 12€', ['Azul', 'Clank'], null);
+  assert.equal(p.total, 12);
+  assert.ok(panneauHtml({ fait: 1, total: 1, jeux: [], vendeurs: [], lots: [{ titre: 'L', url: '', prix: 15, jeux: ['Azul', 'Clank'], ...p }] }).includes('1 prix sur 2'));
 });

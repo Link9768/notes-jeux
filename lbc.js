@@ -76,7 +76,8 @@
     const body = c && Date.now() - c.t < 3600000 ? c.body : parseAnnonceBody(await page(lot.url));
     if (body == null) throw CAPTCHA;
     if (!c) ecrire(cle, { t: Date.now(), body });
-    return jeuxDansTexte(lot.titre + ' ' + body, liste);
+    const texte = lot.titre + ' ' + body;
+    return { trouves: jeuxDansTexte(texte, liste), texte };
   }
 
   (async () => {
@@ -120,8 +121,16 @@
     for (const [i, c] of aLire.entries()) {
       maj(`Lecture des lots : ${i + 1}/${aLire.length}…`);
       try {
-        const trouves = await confirmeLot(c.lot, liste);
-        if (trouves.length >= 2) lots = [...lots, { ...c.lot, jeux: trouves, procheParis: CP_PARIS.includes(c.lot.cp) }].sort((a, b) => b.jeux.length - a.jeux.length);
+        const { trouves, texte } = await confirmeLot(c.lot, liste);
+        if (trouves.length >= 2) {
+          // annonce du même vendeur pour un jeu (la moins chère), déjà vue dans les recherches : prix réel de ce jeu
+          const duVendeur = j => {
+            const x = jeux.find(y => y.demande === j);
+            const m = ((x && x.annonces) || []).filter(a => c.lot.cle && a.cle === c.lot.cle && a.url !== c.lot.url).sort((a, b) => a.prix - b.prix)[0];
+            return m ? { prix: m.prix, url: m.url } : null;
+          };
+          lots = [...lots, { ...c.lot, jeux: trouves, ...detailLot(texte, trouves, duVendeur), procheParis: CP_PARIS.includes(c.lot.cp) }].sort((a, b) => b.jeux.length - a.jeux.length);
+        }
       } catch (e) { if (e === CAPTCHA) return captcha(); }
     }
     maj();
