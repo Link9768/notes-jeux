@@ -7,7 +7,7 @@ const vm = require('node:vm');
 const html = fs.readFileSync(`${__dirname}/../index.html`, 'utf8');
 const script = html.match(/<script>([\s\S]*?)<\/script>/)[1];
 const el = () => ({ addEventListener() {}, value: '', innerHTML: '' });
-const front = vm.runInNewContext(`${script}; ({ okk, tile, fr, bggCard, liens, findBga, bgaBadge, auteur, retour, pile, panierHtml, semblables, lbcUrl })`, {
+const front = vm.runInNewContext(`${script}; ({ okk, tile, fr, bggCard, liens, findBga, bgaBadge, auteur, retour, pile, panierHtml, semblables, lbcUrl, okkUrl, planPanier, conseilPanier, suivis, listes, basculerSuivi, majMax, donneesSauvegarde, fusionner, restaurer, histoHtml, suiviHtml })`, {
   document: { querySelector: el }, location: { search: '' }, history: {}, fetch: async () => { throw new Error('pas de réseau'); }, URLSearchParams,
 });
 
@@ -586,6 +586,39 @@ test('lien Leboncoin : catégorie jeux, liste dans le hash, 300 jeux au plus ; f
   assert.ok(html.includes('id="plbc"'));
 });
 
+test('favori Okkazeo : lien avec liste et jeux à sécuriser dans le hash, 300 au plus ; bouton, conseil et favori présents', () => {
+  assert.equal(front.okkUrl(['Azul', 'Clank']), 'https://www.okkazeo.com/#nj=Azul%7CClank');
+  assert.ok(front.okkUrl(['Azul', 'Clank'], ['Azul']).endsWith('&ns=Azul'));
+  assert.equal(decodeURIComponent(front.okkUrl(Array.from({ length: 301 }, (_, i) => 'j' + i)).split('#nj=')[1]).split('|').length, 300);
+  assert.ok(/href="javascript:[^"]*link9768\.github\.io\/notes-jeux\/okk\.js/.test(html));
+  assert.ok(html.includes('id="pokk"') && html.includes('id="pconseil"'));
+});
+test('plan du matchmaking : paquets de 50 jusqu\'à 64 jeux, mode lent par paquets de 15 au-delà ; conseil du favori', () => {
+  assert.deepEqual({ ...front.planPanier(10) }, { lent: false, paquet: 50, paliers: 1, estime: 5 });
+  assert.deepEqual([64, 65].map(n => front.planPanier(n)).map(p => [p.lent, p.paquet, p.paliers]), [[false, 50, 2], [true, 15, 5]]);
+  assert.deepEqual([front.planPanier(300).paliers, front.planPanier(300).estime], [20, 900]);
+  assert.equal(front.conseilPanier(64), '');
+  assert.ok(front.conseilPanier(65).includes('favori Okkazeo') && front.conseilPanier(65).includes('mode lent'));
+});
+test('matchmaking : Okkazeo bloque le serveur → message et favori ; jeu non vérifié ≠ introuvable', () => {
+  const h = front.panierHtml({ bloque: true, jeux: [{ demande: 'zzz', titre: null, url: null, annonces: 0, nonVerifie: true }], vendeurs: [], erreurs: [] });
+  assert.ok(h.includes('Okkazeo bloque le serveur') && h.includes('favori Okkazeo'));
+  assert.ok(h.includes('zzz : non vérifié') && !h.includes('introuvable'));
+});
+test('matchmaking : 100 jeux → appels cumulés de 15, total=100, arrêt au 1er appel qui répond « bloque »', async () => {
+  const els = {}, urls = [];
+  const get = k => els[k] || (els[k] = { addEventListener(t, fn) { (this.h = this.h || {})[t] = fn; }, value: '', innerHTML: '' });
+  const ctx = { document: { querySelector: get }, location: { search: '' }, history: {}, URLSearchParams, setInterval: () => 0, clearInterval() {},
+    fetch: async u => { if (!String(u).includes('notes-jeux-panier')) return { ok: false }; urls.push(String(u)); return { ok: true, json: async () => (urls.length >= 2 ? { bloque: true, jeux: [{ demande: 'j1', titre: null, url: null, annonces: 0, nonVerifie: true }], vendeurs: [], erreurs: [] } : { jeux: [], vendeurs: [], erreurs: [] }) }; } };
+  vm.runInNewContext(script, ctx);
+  get('#pj').value = Array.from({ length: 100 }, (_, i) => 'j' + i).join('\n');
+  await get('#pf').h.submit({ preventDefault() {} });
+  assert.equal(urls.length, 2);
+  const noms = u => decodeURIComponent(/jeux=([^&]*)/.exec(u)[1]).split('|').length;
+  assert.deepEqual([noms(urls[0]), noms(urls[1])], [15, 30]);
+  assert.ok(urls.every(u => u.includes('&total=100')));
+  assert.ok(get('#pr').innerHTML.includes('Okkazeo bloque le serveur'));
+});
 test('rejouabilité dans l\'encart BGG : niveau, parties par propriétaire, cas escape game et jeu ancien', () => {
   const el = () => ({ innerHTML: '', value: '', addEventListener() {} });
   const f = vm.runInNewContext(`${script}; ({ rejouHtml })`, { document: { querySelector: el }, location: { search: '' }, history: {}, fetch: async () => { throw new Error('x'); }, URLSearchParams });
@@ -693,4 +726,67 @@ test('matchmaking : jeux classés du plus d’annonces au moins, introuvables en
   const o = front.okk({ total: 5, min: 10, max: 30, url: 'https://www.okkazeo.com/jeux/9/clank', annonces: [] }, '#');
   assert.ok(o.includes('<a href="https://www.okkazeo.com/jeux/9/clank" target="_blank" rel="noopener">'), 'encart Okkazeo');
   assert.ok(front.okk(null, 'https://www.okkazeo.com/jeux/resultats?rech_nom=x').includes('target="_blank"'));
+});
+
+// Veille : médiane Okkazeo, jeux suivis, sauvegarde, historique des prix.
+test('okk : médiane affichée, « bonne affaire » seulement à 75 % de la médiane ou moins ; sans médiane (moins de 3 annonces) rien', () => {
+  const avec = (prix, mediane) => front.okk({ ...okkazeo([annonce(`${year}-10-10`, { prix })]), mediane }, '#');
+  const bas = avec(18, 26);
+  assert.ok(bas.includes('médiane 26 €') && bas.includes('bonne affaire'));
+  const haut = avec(25, 26);
+  assert.ok(haut.includes('médiane 26 €') && !haut.includes('bonne affaire'));
+  const aucune = avec(18, null);
+  assert.ok(!aucune.includes('médiane') && !aucune.includes('bonne affaire'));
+  assert.ok(!front.okk(okkazeo([annonce(`${year}-10-10`)]), '#').includes('médiane')); // champ absent (ancienne réponse)
+  assert.equal(front.okk({ ...okkazeo([annonce(`${year}-10-10`, { prix: 18, bonneAffaire: true })]), mediane: 26 }, '#').split('bonne affaire').length, 2); // une seule pastille
+});
+test('suivis : basculer ajoute puis retire ; prix max entier > 0 sinon null', () => {
+  front.suivis.length = 0;
+  assert.equal(front.basculerSuivi('Clank!'), true);
+  assert.deepEqual(JSON.parse(JSON.stringify(front.suivis)), [{ titre: 'Clank!', max: null }]);
+  front.majMax('clank!', '25');
+  assert.equal(front.suivis[0].max, 25);
+  front.majMax('Clank!', '');
+  assert.equal(front.suivis[0].max, null);
+  front.majMax('Clank!', '-3');
+  assert.equal(front.suivis[0].max, null);
+  front.basculerSuivi(' CLANK! ');
+  assert.equal(front.suivis.length, 0);
+  const h = front.suiviHtml({ query: 'abyss', myludo: { titre: 'Abyss' } });
+  assert.ok(h.includes('suivi-w') && h.includes('🔔 Suivre') && h.includes('connecte ☁ Sauvegarde'));
+  front.basculerSuivi('Abyss');
+  front.majMax('Abyss', '20');
+  assert.ok(front.suiviHtml({ query: 'abyss', myludo: { titre: 'Abyss' } }).includes('🔔 Suivi</button><input class="pmax"') );
+  assert.ok(front.suiviHtml({ query: 'abyss', myludo: { titre: 'Abyss' } }).includes('value="20"'));
+  front.suivis.length = 0;
+  for (let i = 0; i < 55; i++) front.basculerSuivi('Jeu ' + i);
+  assert.equal(front.suivis.length, 50);
+  front.suivis.length = 0;
+});
+test('sauvegarde : les suivis partent avec les listes, se fusionnent, et une sauvegarde ancienne ne les efface pas', () => {
+  front.suivis.length = 0;
+  front.basculerSuivi('Clank!');
+  const d = front.donneesSauvegarde('2026-11-28T07:00:00Z');
+  assert.deepEqual(JSON.parse(JSON.stringify(d.suivis)), [{ titre: 'Clank!', max: null }]);
+  assert.ok(Array.isArray(d.listes) && d.date === '2026-11-28T07:00:00Z');
+  front.fusionner({ listes: [], suivis: [{ titre: 'Abyss', max: 30 }, { titre: 'clank!', max: 5 }] });
+  assert.deepEqual(JSON.parse(JSON.stringify(front.suivis)), [{ titre: 'Clank!', max: null }, { titre: 'Abyss', max: 30 }]);
+  front.restaurer({ listes: [], date: '2026-11-28T07:00:00Z' }); // sauvegarde sans suivis : on garde les locaux
+  assert.equal(front.suivis.length, 2);
+  front.restaurer({ listes: [], suivis: [{ titre: 'Azul', max: 12 }], date: '2026-11-28T07:00:00Z' });
+  assert.deepEqual(JSON.parse(JSON.stringify(front.suivis)), [{ titre: 'Azul', max: 12 }]);
+  front.suivis.length = 0;
+});
+test('histoHtml : médiane du jour, repère à 30 jours ou plus, premier relevé, introuvable', () => {
+  const iso = n => new Date(Date.now() - n * 86400000).toISOString().slice(0, 10);
+  const ddmm = n => iso(n).slice(8, 10) + '/' + iso(n).slice(5, 7);
+  const h = front.histoHtml({ okk: 'Clank!', pts: [[iso(35), 30, 20, 9], [iso(1), 28, 18, 11], [iso(0), 26, 15, 12]] });
+  assert.ok(h.includes(`médiane 26 € le ${ddmm(0)}`) && h.includes('30 € il y a 35 j') && h.includes('min 15 €') && h.includes('12 annonces'), h);
+  const un = front.histoHtml({ okk: 'Clank!', pts: [[iso(0), 26, 15, 12]] });
+  assert.ok(un.includes('médiane 26 €') && !un.includes('il y a'), un);
+  assert.ok(front.histoHtml({ okk: 'Clank!', pts: [] }).includes('premier relevé'));
+  assert.ok(front.histoHtml({ pts: [] }).includes('premier relevé')); // jeu inconnu du serveur
+  assert.ok(front.histoHtml({ okk: null, pts: [] }).includes('introuvable sur Okkazeo'));
+  const deux = front.histoHtml({ okk: 'Clank!', pts: [[iso(10), 30, 20, 9], [iso(0), 26, 15, 12]] }); // moins de 30 j : le plus ancien
+  assert.ok(deux.includes('30 € il y a 10 j'), deux);
 });

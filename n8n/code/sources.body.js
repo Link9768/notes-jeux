@@ -74,7 +74,7 @@ async function okkazeo() {
     p = pickProduct(q, cands);
     if (p) break;
   }
-  const vide = { total: 0, min: null, max: null, url: p ? p.url : liens.okkazeo, annonces: [], bggUrl: null };
+  const vide = { total: 0, min: null, max: null, url: p ? p.url : liens.okkazeo, annonces: [], bggUrl: null, mediane: null };
   if (!p) return vide;
   const editions = cands.filter(c => normalize(c.title) === normalize(p.title) && c.annonces !== 0).slice(0, 3);
   if (!editions.length) {
@@ -93,6 +93,7 @@ async function okkazeo() {
     parsees: toutes.length,
     bggUrl: pages.map(parseBggLink).find(Boolean) || null,
     annonces: filterParis(toutes, CP_PARIS),
+    mediane: toutes.length >= 3 ? mediane(toutes.map(a => a.prix)) : null, // médiane France des annonces lues (null si moins de 3)
   };
 }
 

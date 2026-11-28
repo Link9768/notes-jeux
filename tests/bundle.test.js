@@ -22,13 +22,13 @@ const ROUTES = {
 
 function run(name, { nodes, input = {}, http }) {
   const calls = [];
-  const $ = n => ({ first: () => ({ json: nodes[n] }) });
+  const $ = n => ({ first: () => ({ json: nodes[n] }), isExecuted: n in nodes });
   const $input = { first: () => ({ json: input }) };
   const ctx = { helpers: { httpRequest: async o => { calls.push(o); return http(o); } } };
   // Le bac à sable des nodes Code n8n n'a NI URL NI URLSearchParams (vérifié le 2026-10-13) : on les masque.
   // Il a en revanche un `module` : les blocs « module.exports » des libs s'y exécutent.
   return new AsyncFunction('$', '$input', 'URL', 'URLSearchParams', 'module', bundle(name))
-    .call(ctx, $, $input, undefined, undefined, { exports: {} }).then(r => ({ out: r[0].json, calls }));
+    .call(ctx, $, $input, undefined, undefined, { exports: {} }).then(r => ({ out: r[0] ? r[0].json : null, calls }));
 }
 // MyLudo : l'API exige le jeton CSRF de la page d'accueil ET le cookie de session (sinon « Illegal action »).
 const MYL = 'https://www.myludo.fr';
@@ -254,12 +254,62 @@ test('panier : jeux à sécuriser (secu) → encart des vendeurs qui ont tous ce
   const sans = await run('panier', { nodes: panierNodes('clank|dixit: odyssey'), http: panierHttp });
   assert.equal(sans.out.securises, undefined);
 });
-test('panier : un jeu en panne (403) → erreur pour ce jeu, les autres servent', async () => {
-  const { out } = await run('panier', { nodes: panierNodes('clank|dixit: odyssey'), http: o => (o.url === OK_DIXIT ? { statusCode: 403, body: '' } : panierHttp(o)) });
+test('panier : un jeu en panne (404) → erreur pour ce jeu, les autres servent', async () => {
+  const { out } = await run('panier', { nodes: panierNodes('clank|dixit: odyssey'), http: o => (o.url === OK_DIXIT ? { statusCode: 404, body: '' } : panierHttp(o)) });
   assert.equal(out.jeux[0].annonces, 14);
   assert.equal(out.jeux[1].titre, null);
   assert.ok(out.erreurs[0].startsWith('dixit: odyssey:'), JSON.stringify(out.erreurs));
   assert.deepEqual(out.vendeurs, []);
+  assert.equal(out.bloque, undefined);
+});
+// Coupe-circuit : au 1er blocage Okkazeo (403/429/503, challenge, page inattendue), plus aucune requête ; les jeux restants sont « non vérifiés ».
+const avecStatique = async (statique, f) => { globalThis.$getWorkflowStaticData = () => statique; try { return await f(); } finally { delete globalThis.$getWorkflowStaticData; } };
+test('panier : 403 sur la 1re recherche → coupe-circuit, 1 seule requête, jeux non vérifiés, pas d’erreur', async () => {
+  const { out, calls } = await run('panier', { nodes: { Webhook: { query: { jeux: 'dixit: odyssey|clank|azertyuiop', total: '100' } } }, http: () => ({ statusCode: 403, body: '' }) });
+  assert.equal(calls.length, 1);
+  assert.equal(out.bloque, true);
+  assert.equal(out.jeux.length, 3);
+  assert.ok(out.jeux.every(j => j.titre === null && j.nonVerifie === true));
+  assert.deepEqual(out.erreurs, []);
+  assert.deepEqual(out.vendeurs, []);
+});
+test('panier : page de challenge servie en 200 (« Just a moment ») → bloqué, aucune requête de fiche', async () => {
+  const { out, calls } = await run('panier', { nodes: panierNodes('clank|dixit: odyssey'), http: () => ({ statusCode: 200, body: '<html><head><title>Just a moment...</title></head></html>' }) });
+  assert.equal(out.bloque, true);
+  assert.ok(calls.every(c => c.url.includes('/jeux/resultats')));
+});
+test('panier : page de recherche inattendue (200 sans résultat) → bloqué', async () => {
+  const { out, calls } = await run('panier', { nodes: { Webhook: { query: { jeux: 'clank|dixit: odyssey', total: '100' } } }, http: () => ({ statusCode: 200, body: '<html>maintenance</html>' }) });
+  assert.equal(out.bloque, true);
+  assert.equal(calls.length, 1);
+  assert.ok(out.jeux.every(j => j.nonVerifie));
+});
+test('panier : blocage après des jeux en mémoire → jeux mémorisés servis, le reste non vérifié, rien mémorisé pour lui', async () => {
+  const statique = {};
+  await avecStatique(statique, async () => {
+    const a = await run('panier', { nodes: panierNodes('clank|dixit: odyssey'), http: panierHttp });
+    assert.equal(a.out.bloque, undefined);
+    const b = await run('panier', { nodes: panierNodes('clank|dixit: odyssey|azertyuiop'), http: () => ({ statusCode: 403, body: '' }) });
+    assert.equal(b.calls.length, 1);
+    assert.equal(b.out.bloque, true);
+    assert.deepEqual(b.out.jeux.map(j => [j.demande, j.titre, !!j.nonVerifie]), [['clank', 'Clank!', false], ['dixit: odyssey', 'Dixit Odyssey', false], ['azertyuiop', null, true]]);
+    assert.ok(!('azertyuiop' in statique.panier));
+  });
+});
+test('panier : plus de 64 jeux (total) → 1 requête par seconde, un seul jeu à la fois', async () => {
+  const t = [];
+  const { out } = await run('panier', { nodes: { Webhook: { query: { jeux: 'clank|azertyuiop', total: '100' } } }, http: o => { t.push(Date.now()); return panierHttp(o); } });
+  assert.equal(t.length, 3); // 2 recherches + la fiche de Clank!
+  for (let i = 1; i < t.length; i++) assert.ok(t[i] - t[i - 1] >= 950, `écart ${t[i] - t[i - 1]} ms`);
+  assert.equal(out.bloque, undefined);
+});
+test('panier : appel intermédiaire (total > jeux de ce paquet) → pas de lecture du total d’annonces des vendeurs', async () => {
+  const q = total => ({ Webhook: { query: { jeux: 'clank|dixit: odyssey', total } } });
+  const inter = await run('panier', { nodes: q('5'), http: panierHttp });
+  assert.ok(!inter.calls.some(c => c.url.includes('/annonces/')));
+  assert.ok(inter.out.vendeurs.length > 0 && inter.out.vendeurs.every(v => v.nbAnnonces === undefined));
+  const fin = await run('panier', { nodes: q('2'), http: panierHttp });
+  assert.ok(fin.out.vendeurs.every(v => v.nbAnnonces === 35));
 });
 test('panier et encart Okkazeo : rien au pluriel → nouvel essai au singulier (« clanks » → « clank »)', async () => {
   const pluriel = 'https://www.okkazeo.com/jeux/resultats?rech_nom=clanks';
@@ -316,6 +366,87 @@ test('panier : plus de 15 jeux → requêtes Okkazeo espacées d’au moins 0,4 
     const c = await run('panier', { nodes: panierNodes('clank|dixit: odyssey'), http: panierHttp });
     assert.ok(c.calls.length > 0);
   } finally { delete globalThis.$getWorkflowStaticData; }
+});
+test('sources : médiane France des annonces lues (14 annonces → 40,55 €), null si moins de 3', async () => {
+  const { out } = await run('sources', { nodes: sourcesNodes(), http: serve() });
+  assert.equal(out.okkazeo.mediane, 40.55);
+  const vide = await run('sources', { nodes: sourcesNodes('azertyuiop'), http: serve({ 'https://www.okkazeo.com/jeux/resultats?rech_nom=azertyuiop': { statusCode: 200, body: fx('okkazeo-search-vide.html') } }) });
+  assert.equal(vide.out.okkazeo.mediane, null);
+});
+// Veille : mêmes pages Okkazeo que le Panier ; les titres suivis (« Clank! », « Dixit Odyssey ») sont routés vers les pages enregistrées.
+const veilleHttp = o => {
+  if (o.url.includes('rech_nom=Clank')) return panierHttp({ ...o, url: OK_SEARCH });
+  if (o.url.includes('rech_nom=Dixit')) return panierHttp({ ...o, url: OK_DIXIT });
+  return panierHttp(o);
+};
+const veilleSuivis = [{ titre: 'Clank!' }, { titre: 'Dixit Odyssey' }];
+async function runVeille(nodes, http, statique) {
+  globalThis.$getWorkflowStaticData = () => statique;
+  try { return await run('veille', { nodes, http }); } finally { delete globalThis.$getWorkflowStaticData; }
+}
+test('veille : jeux suivis → message Telegram (vendeurs communs), historique, annonces signalées une seule fois', async () => {
+  const statique = { veille: { chatId: 42 } };
+  const t = [];
+  const a = await runVeille({ 'Lire sauvegarde': { suivis: veilleSuivis } }, o => { t.push(Date.now()); return veilleHttp(o); }, statique);
+  assert.equal(a.out.chatId, 42);
+  assert.ok(a.out.texte.includes('Vendeurs qui ont plusieurs de tes jeux suivis'), a.out.texte);
+  assert.ok(a.out.texte.includes('Alice') && a.out.texte.includes('Bob'));
+  assert.equal(statique.veille.histo['clank!'].pts[0][3], 14);
+  assert.ok(statique.veille.histo['dixit odyssey'].pts[0][3] > 0);
+  assert.ok(a.calls.every(c => c.headers['Sec-Fetch-Dest'] === 'document'));
+  for (let i = 1; i < t.length; i++) assert.ok(t[i] - t[i - 1] >= 300, `écart ${t[i] - t[i - 1]} ms`);
+  assert.ok(Object.keys(statique.veille.signalees).some(k => k.startsWith('v:alice:')));
+  assert.equal(statique.veille.derniere.jeux, 2);
+  const b = await runVeille({ 'Lire sauvegarde': { suivis: veilleSuivis } }, veilleHttp, statique); // tout est déjà signalé
+  assert.equal(b.out, null);
+  assert.equal(statique.veille.histo['clank!'].pts.length, 1); // même jour : remplacé
+});
+test('veille : Okkazeo bloque (403 partout) → message de panne après 3 échecs, rien enregistré', async () => {
+  const statique = { veille: { chatId: 42 } };
+  const suivis = ['A', 'B', 'C', 'D'].map(titre => ({ titre }));
+  const r = await runVeille({ 'Lire sauvegarde': { suivis } }, () => ({ statusCode: 403, body: '' }), statique);
+  assert.ok(r.out.texte.includes('Okkazeo ne répond pas') && r.out.texte.includes('HTTP 403'), r.out.texte);
+  assert.equal(r.calls.length, 3);
+  assert.deepEqual([statique.veille.histo, statique.veille.signalees, statique.veille.derniere], [{}, {}, undefined]);
+});
+test('veille : sans chat inscrit → rien envoyé, historique enregistré, rien de signalé', async () => {
+  const statique = {};
+  const r = await runVeille({ 'Lire sauvegarde': { suivis: veilleSuivis } }, veilleHttp, statique);
+  assert.equal(r.out, null);
+  assert.equal(statique.veille.histo['clank!'].pts[0][3], 14);
+  assert.deepEqual(statique.veille.signalees, {});
+});
+test('veille : lancée par /veille sans nouveauté → « Rien de nouveau » ; sans jeu suivi → message ; Drive en erreur → message', async () => {
+  const statique = { veille: { chatId: 42, signalees: {} } };
+  const un = { 'Lire sauvegarde': { suivis: [{ titre: 'Clank!', max: 1 }] }, Inscription: { lancer: true } };
+  const a = await runVeille(un, veilleHttp, statique);
+  assert.equal(a.out.texte, 'Rien de nouveau · 1 jeux vérifiés.');
+  const b = await runVeille({ 'Lire sauvegarde': { listes: [] }, Inscription: { lancer: true } }, veilleHttp, statique);
+  assert.ok(b.out.texte.startsWith('Aucun jeu suivi'));
+  const c = await runVeille({ 'Lire sauvegarde': { listes: [] } }, veilleHttp, statique);
+  assert.equal(c.out, null); // planifié, rien à suivre : silence
+  const d = await runVeille({ 'Lire sauvegarde': { error: { message: 'HTTP 500' } } }, veilleHttp, statique);
+  assert.ok(d.out.texte.includes('sauvegarde Drive illisible') && d.out.texte.includes('HTTP 500'));
+});
+test('veille-inscription : /start verrouille le premier chat, /veille et /stop réservés à ce chat', async () => {
+  const statique = {};
+  const cmd = async (id, text) => { globalThis.$getWorkflowStaticData = () => statique; try { return (await run('veille-inscription', { nodes: {}, input: { message: { chat: { id }, text } }, http: () => null })).out; } finally { delete globalThis.$getWorkflowStaticData; } };
+  assert.match((await cmd(42, '/start')).texte, /Alertes Notes Jeux activées/);
+  assert.equal(statique.veille.chatId, 42);
+  assert.equal(await cmd(99, '/start'), null);
+  assert.equal(statique.veille.chatId, 42);
+  assert.deepEqual(await cmd(42, '/veille'), { lancer: true });
+  assert.equal(await cmd(99, '/veille'), null);
+  assert.match((await cmd(42, 'salut')).texte, /Commandes/);
+  assert.match((await cmd(42, '/stop')).texte, /désactivées/);
+  assert.equal(statique.veille.chatId, undefined);
+  assert.equal((await cmd(99, '/start')).chatId, 99); // chat libéré : un autre peut s'inscrire
+});
+test('veille-histo : historique du jeu (casse et espaces ignorés), inconnu → pts vide', async () => {
+  const statique = { veille: { histo: { 'clank!': { titre: 'Clank!', okk: 'Clank!', pts: [['2026-11-28', 26, 15, 12]] } }, derniere: { jeux: 1 } } };
+  const h = async jeu => { globalThis.$getWorkflowStaticData = () => statique; try { return (await run('veille-histo', { nodes: { Webhook: { query: { jeu } } }, http: () => null })).out; } finally { delete globalThis.$getWorkflowStaticData; } };
+  assert.deepEqual(await h(' CLANK! '), { titre: 'Clank!', okk: 'Clank!', pts: [['2026-11-28', 26, 15, 12]], maj: { jeux: 1 } });
+  assert.deepEqual(await h('inconnu'), { pts: [], maj: { jeux: 1 } });
 });
 test('sources : version duo intégrable (Res Arcana → Res Arcana Duo) ; geekitems en panne → duo null sans erreur', async () => {
   const DUO = JSON.parse(fx('bgg-geekitems-duo.json'));

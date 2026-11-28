@@ -9,6 +9,8 @@ const WORKFLOWS = [
   { id: 'wA0aeGJ9Uh0FqKnW', fichier: 'Notes Jeux API.json', nodes: { 'BGG Candidats': 'bgg-candidats', 'BGG Fiche': 'bgg-fiche', Sources: 'sources' } },
   { id: 'BpOByDLzTv8MtBky', fichier: 'Notes Jeux Panier.json', nodes: { Panier: 'panier' } },
   { id: 'tETUBgC3dAyYKHMn', fichier: 'Notes Jeux Outils.json', nodes: { Outils: 'outils' } },
+  // Workflow « Notes Jeux — Veille » : remplir l'id après sa création (ignoré tant qu'il est vide).
+  { id: '', fichier: 'Notes Jeux Veille.json', nodes: { Veille: 'veille', Inscription: 'veille-inscription', Historique: 'veille-histo' } },
 ];
 
 const mcp = JSON.parse(readFileSync(new URL('../../.mcp.json', import.meta.url), 'utf8')).mcpServers['n8n-mcp'].env;
@@ -16,6 +18,7 @@ const base = mcp.N8N_API_URL.replace(/\/+$/, '');
 
 let ko = 0;
 for (const w of WORKFLOWS) {
+  if (!w.id) continue;
   const res = await fetch(`${base}/api/v1/workflows/${w.id}`, { headers: { 'X-N8N-API-KEY': mcp.N8N_API_KEY } });
   if (!res.ok) throw new Error(`n8n API : HTTP ${res.status}`);
   const wf = await res.json();

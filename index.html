@@ -98,6 +98,7 @@ button.chip:hover,button.chip.on{background:var(--bgg);color:#fff}
 .lrow{display:flex;flex-wrap:wrap;align-items:flex-start;gap:6px 14px}.neuf{margin-top:6px;font-size:12px;color:var(--mut)}
 .addl summary{cursor:pointer;font-size:12px;color:var(--mut);display:inline-block}
 .addl .chips{margin-top:6px}
+.suivi-w{display:inline-flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:6px}.pmax{width:96px;font:inherit;font-size:12px;padding:3px 8px;border-radius:14px;border:1px solid var(--line);background:transparent;color:var(--txt)}
 .nvlw{display:flex;gap:6px;margin-top:8px}
 .nvlw input{padding:6px 10px;font-size:14px;flex:0 1 220px}
 .sim .x{border:0;background:transparent;color:var(--mut);padding:0 4px;font-size:13px;cursor:pointer}
@@ -128,6 +129,7 @@ button.chip:hover,button.chip.on{background:var(--bgg);color:#fff}
 .panier textarea{flex:1;min-width:0;padding:10px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--txt);font:inherit;font-size:15px;resize:vertical}
 .panier button{background:var(--okk)}
 .panier button#plbc{background:#ec5a13}
+.panier button#pokk{background:var(--okk)}
 .panier .bts{display:flex;flex-direction:column;gap:8px}
 .panier details{padding:0 12px 12px;font-size:12px;color:var(--mut)}
 .panier #ps{width:100%;box-sizing:border-box;margin:6px 0}
@@ -151,12 +153,18 @@ button.chip:hover,button.chip.on{background:var(--bgg);color:#fff}
   <div id="out" aria-live="polite"></div>
   <section class="panier">
     <header><b>Matchmaking Okkazeo</b><span>vendeurs qui ont plusieurs jeux de ta liste</span></header>
-    <form id="pf"><textarea id="pj" rows="4" aria-label="Jeux recherchés, un par ligne" placeholder="Un jeu par ligne (2 à 300)&#10;7 Wonders Duel&#10;Carcassonne&#10;Azul"></textarea><input id="ps" maxlength="200" aria-label="Jeux à sécuriser, séparés par des virgules" placeholder="🔒 À sécuriser (2 à 3 jeux, séparés par des virgules) : vendeurs qui les ont tous"><div class="bts"><button>Chercher les vendeurs</button><button type="button" id="plbc">Leboncoin</button></div></form>
+    <form id="pf"><textarea id="pj" rows="4" aria-label="Jeux recherchés, un par ligne" placeholder="Un jeu par ligne (2 à 300)&#10;7 Wonders Duel&#10;Carcassonne&#10;Azul"></textarea><input id="ps" maxlength="200" aria-label="Jeux à sécuriser, séparés par des virgules" placeholder="🔒 À sécuriser (2 à 3 jeux, séparés par des virgules) : vendeurs qui les ont tous"><div class="bts"><button>Chercher les vendeurs</button><button type="button" id="plbc">Leboncoin</button><button type="button" id="pokk">Okkazeo (favori)</button></div></form>
+    <p id="pconseil" class="mut" hidden></p>
     <details><summary>Installer le favori Matchmaking LBC</summary>
       <p><a href="javascript:(()=>{const s=document.createElement('script');s.src='https://link9768.github.io/notes-jeux/lbc.js?'+Date.now();document.body.appendChild(s)})()">Matchmaking LBC</a></p>
       <input readonly value="javascript:(()=>{const s=document.createElement('script');s.src='https://link9768.github.io/notes-jeux/lbc.js?'+Date.now();document.body.appendChild(s)})()" aria-label="Code du favori">
       <p>PC : glisse le lien dans ta barre de favoris. Android (Chrome) : crée un favori de n'importe quelle page, remplace son adresse par le code ci-dessus et nomme-le « Matchmaking LBC » ; sur leboncoin.fr, tape « Matchmaking LBC » dans la barre d'adresse et choisis le favori.</p>
       <p>Ensuite : clique sur Leboncoin ci-dessus, puis lance le favori sur l'onglet Leboncoin.</p></details>
+    <details><summary>Installer le favori Matchmaking Okkazeo (plus de 64 jeux)</summary>
+      <p><a href="javascript:(()=>{const s=document.createElement('script');s.src='https://link9768.github.io/notes-jeux/okk.js?'+Date.now();document.body.appendChild(s)})()">Matchmaking Okkazeo</a></p>
+      <input readonly value="javascript:(()=>{const s=document.createElement('script');s.src='https://link9768.github.io/notes-jeux/okk.js?'+Date.now();document.body.appendChild(s)})()" aria-label="Code du favori Okkazeo">
+      <p>PC : glisse le lien dans ta barre de favoris. Android (Chrome) : crée un favori de n'importe quelle page, remplace son adresse par le code ci-dessus et nomme-le « Matchmaking Okkazeo » ; sur okkazeo.com, tape « Matchmaking Okkazeo » dans la barre d'adresse et choisis le favori.</p>
+      <p>Au-delà de 64 jeux, le serveur ralentit (1 requête/s) pour ne pas être bloqué par Okkazeo ; le favori fait la recherche depuis ton navigateur. Clique sur Okkazeo (favori), puis lance le favori sur l'onglet Okkazeo.</p></details>
     <div id="pr" aria-live="polite"></div>
   </section>
 </main>
@@ -420,10 +428,32 @@ function dealTag(prix, neuf) {
 }
 function okk(o, lien, neuf = null) {
   if (!o) return `<section class="okk"><header><b>Okkazeo</b><div>indisponible</div></header><footer>${extNouv(lien, 'Chercher sur Okkazeo ↗')}</footer></section>`;
-  const rows = o.annonces.map(a => `<div class="ann"><b>${fr(a.prix)} €${dealTag(a.prix, neuf)}</b><span>${esc(a.etat)}${a.bonneAffaire ? '<span class="tag ok">bonne affaire</span>' : ''}${a.extensions ? '<span class="tag">+ ext.</span>' : ''}<br><span class="mut">${esc(a.ville ?? '')}</span></span><span class="mut">${fmtDate(a.date)}</span></div>`).join('');
-  const prix = (o.total && o.min != null ? ` · ${fr(o.min)}–${fr(o.max)} €` : '') + (neuf != null ? ` · neuf dès ${fr(neuf)} €` : '');
+  const med = o.mediane != null ? o.mediane : null; // médiane France des annonces lues (null si moins de 3)
+  const rows = o.annonces.map(a => `<div class="ann"><b>${fr(a.prix)} €${dealTag(a.prix, neuf)}</b><span>${esc(a.etat)}${med != null ? `<span class="mut"> · médiane ${fr(med)} €</span>` : ''}${a.bonneAffaire || (med != null && a.prix <= SEUIL_MEDIANE * med) ? '<span class="tag ok">bonne affaire</span>' : ''}${a.extensions ? '<span class="tag">+ ext.</span>' : ''}<br><span class="mut">${esc(a.ville ?? '')}</span></span><span class="mut">${fmtDate(a.date)}</span></div>`).join('');
+  const prix = (o.total && o.min != null ? ` · ${fr(o.min)}–${fr(o.max)} €` : '') + (neuf != null ? ` · neuf dès ${fr(neuf)} €` : '') + (med != null ? ` · médiane ${fr(med)} €` : '');
   const pied = o.annonces.length ? 'Ouvrir sur Okkazeo ↗' : o.total ? `Voir les ${o.total} annonces France ↗` : 'Ouvrir sur Okkazeo ↗';
   return `<section class="okk"><header><b>Okkazeo · ${o.annonces.length} près de Paris</b><div>${o.total} en France${prix}</div></header>${rows}<footer>${extNouv(o.url, pied)}</footer></section>`;
+}
+
+// Historique des prix d'un jeu suivi (workflow Veille, 1 point par jour : [jour, médiane, min, n]).
+const jjmmFr = j => String(j).slice(8, 10) + '/' + String(j).slice(5, 7);
+const joursEntre = (a, b) => Math.round((Date.parse(b + 'T00:00:00Z') - Date.parse(a + 'T00:00:00Z')) / 86400000);
+function histoHtml(h) {
+  if (!h || h.okk === null) return '<p class="mut">🔔 Suivi · introuvable sur Okkazeo sous ce titre</p>';
+  const pts = Array.isArray(h.pts) ? h.pts : [];
+  if (!pts.length) return '<p class="mut">🔔 Suivi · premier relevé demain matin</p>';
+  const der = pts[pts.length - 1];
+  if (der[1] == null) return `<p class="mut">🔔 Suivi · aucune annonce au relevé du ${jjmmFr(der[0])}</p>`;
+  // Référence : le point le plus récent vieux d'au moins 30 jours, sinon le plus ancien (s'il y a au moins 2 points).
+  const ref = [...pts].reverse().find(p => p !== der && p[1] != null && joursEntre(p[0], der[0]) >= 30) || (pts.length >= 2 && pts[0][1] != null ? pts[0] : null);
+  const avant = ref && ref !== der ? ` · ${fr(ref[1])} € il y a ${joursEntre(ref[0], der[0])} j` : '';
+  return `<p class="mut">🔔 Suivi · médiane ${fr(der[1])} € le ${jjmmFr(der[0])}${avant} · min ${fr(der[2])} € · ${der[3]} annonce${der[3] > 1 ? 's' : ''}</p>`;
+}
+const histoCache = new Map();
+function veilleHisto(titre, d) {
+  const k = titre.trim().toLowerCase();
+  if (!histoCache.has(k)) histoCache.set(k, fetch(VEILLE_URL + '?jeu=' + encodeURIComponent(titre)).then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }).catch(e => { histoCache.delete(k); throw e; }));
+  histoCache.get(k).then(h => { const e = $('#histo'); if (e && affiche === d) e.innerHTML = histoHtml(h); }, () => {});
 }
 
 function render(d, games) {
@@ -434,8 +464,9 @@ function render(d, games) {
     : `<div class="head"><div><h1>${esc(d.query)}</h1><div class="mut">${bgaBadge(d, games)}${duoBadge(d)}</div>${listesMenu(d)}</div></div>`;
   // Tuile MyLudo minimaliste, comme les boutiques : note, nombre de notes, titre retenu, difficulté MyLudo (⚖ sur 5, en plus de celle de BGG).
   const tiles = `<div class="tiles">${tile('Esprit Jeu', 'var(--ej)', d.espritjeu, 5, 'avis', L.espritjeu)}${tile('Philibert', 'var(--ph)', d.philibert, 5, 'avis', L.philibert)}${tile('MyLudo', 'var(--ml)', m && { note: m.note, avis: m.avis, titre: m.titre, url: m.url, poids: m.complexite }, 10, 'notes', L.myludo || '#')}</div>`;
-  $('#out').innerHTML = `${retour()}${ongletsHtml()}${head}${tiles}${bggCard(d, games)}${pourToi(d)}${semblables(d)}${jumeauxBloc(d)}${auteur(m)}${okk(d.okkazeo, L.okkazeo, prixNeuf(d))}<div id="videos"></div>`;
+  $('#out').innerHTML = `${retour()}${ongletsHtml()}${head}${tiles}${bggCard(d, games)}${pourToi(d)}${semblables(d)}${jumeauxBloc(d)}${auteur(m)}${okk(d.okkazeo, L.okkazeo, prixNeuf(d))}${suiviDe(titreJeu(d)) ? '<div id="histo"></div>' : ''}<div id="videos"></div>`;
   majVers();
+  if (suiviDe(titreJeu(d))) veilleHisto(titreJeu(d), d);
   // Jumeaux préchargés en arrière-plan (réponse gardée par outil) : le clic sur 🎯 déplie sans attente.
   if (d.bgg && d.bgg.id) outil({ op: 'jumeaux', id: d.bgg.id }).catch(() => {});
   // Vidéos des règles (Ludochrono, Le Chalet) : cherchées en arrière-plan, affichées sous l'encart Okkazeo si elles existent.
@@ -520,6 +551,68 @@ function lireListes() {
 const listes = lireListes();
 const sauverListes = () => { try { localStorage.setItem(LISTES_CLE, JSON.stringify(listes)); } catch (e) { /* voir lireListes */ } planSauvegarde(); };
 
+// Jeux suivis 🔔 : le workflow « Notes Jeux — Veille » (n8n, 7 h) les lit dans la sauvegarde Drive et envoie les bonnes affaires sur Telegram.
+// suivi = { titre (MyLudo), max (prix max perso, entier > 0, ou null) } ; propres à l'appareil comme les listes, mais sauvegardés avec elles.
+const SUIVIS_CLE = 'notesJeux.suivis', MAX_SUIVIS = 50;
+const SEUIL_MEDIANE = 0.75; // même seuil que lib/veille.js : annonce ≤ 75 % de la médiane = « bonne affaire »
+const VEILLE_URL = 'https://n8n.srv1250642.hstgr.cloud/webhook/notes-jeux-veille';
+function nettoyerSuivis(arr) {
+  const vus = new Set(), out = [];
+  for (const x of Array.isArray(arr) ? arr : []) {
+    const titre = x && typeof x.titre === 'string' ? x.titre.trim().slice(0, 60) : '';
+    const k = titre.toLowerCase();
+    if (!titre || vus.has(k)) continue;
+    vus.add(k);
+    const max = Number(x.max);
+    out.push({ titre, max: Number.isInteger(max) && max > 0 ? max : null });
+  }
+  return out.slice(0, MAX_SUIVIS);
+}
+function lireSuivisLocal() {
+  try { return nettoyerSuivis(JSON.parse(localStorage.getItem(SUIVIS_CLE))); } catch (e) { return []; }
+}
+const suivis = lireSuivisLocal();
+const sauverSuivis = () => { try { localStorage.setItem(SUIVIS_CLE, JSON.stringify(suivis)); } catch (e) { /* voir lireListes */ } planSauvegarde(); };
+const suiviDe = titre => suivis.find(s => s.titre.trim().toLowerCase() === String(titre || '').trim().toLowerCase());
+function basculerSuivi(titre) {
+  titre = String(titre || '').trim().slice(0, 60);
+  if (!titre) return false;
+  const s = suiviDe(titre);
+  if (s) suivis.splice(suivis.indexOf(s), 1);
+  else if (suivis.length >= MAX_SUIVIS) { if (typeof alert === 'function') alert(`${MAX_SUIVIS} jeux suivis au maximum : retire-en un d'abord.`); return false; }
+  else suivis.push({ titre, max: null });
+  histoCache.delete(titre.toLowerCase());
+  sauverSuivis();
+  return true;
+}
+function majMax(titre, valeur) {
+  const s = suiviDe(titre);
+  if (!s) return;
+  const n = Number(valeur);
+  s.max = Number.isInteger(n) && n > 0 ? n : null;
+  sauverSuivis();
+}
+// Bouton 🔔 sous le titre du jeu (+ prix max une fois suivi) ; un rappel tant que l'appareil n'est pas relié à la sauvegarde Drive.
+function suiviHtml(d) {
+  const s = suiviDe(titreJeu(d));
+  const bouton = s
+    ? `<button type="button" class="chip on" data-suivi>🔔 Suivi</button><input class="pmax" type="number" min="1" step="1" placeholder="prix max €" aria-label="Prix maximum en euros" data-pmax value="${s.max != null ? s.max : ''}">`
+    : '<button type="button" class="chip" data-suivi>🔔 Suivre</button>';
+  const aide = lsGet(SAUV_CLE) && lsGet(SAUV_SYNC) ? '' : '<span class="mut">connecte ☁ Sauvegarde (Mes listes) pour recevoir les alertes</span>';
+  return `<span class="suivi-w">${bouton}${aide}</span>`;
+}
+// Après un clic sur 🔔 : remplace le bouton sur place et montre / retire la ligne d'historique.
+function majSuiviPage() {
+  if (!affiche) return;
+  const w = $('.suivi-w');
+  if (w) w.outerHTML = suiviHtml(affiche);
+  const t = titreJeu(affiche);
+  let h = $('#histo');
+  if (!suiviDe(t)) { if (h) h.remove(); return; }
+  if (!h) { const o = $('.okk'); if (!o) return; o.insertAdjacentHTML('afterend', '<div id="histo"></div>'); }
+  veilleHisto(t, affiche);
+}
+
 // Sauvegarde sur Google Drive via n8n (workflow « Sauvegarde — Drive ») : la clé est saisie une fois par appareil (localStorage).
 // Sauvegarde automatique 3 s après chaque modification, mais seulement une fois l'appareil synchronisé (première sauvegarde ou
 // restauration faite) : un téléphone neuf ne doit pas écraser la sauvegarde avec des listes vides.
@@ -538,22 +631,26 @@ async function sauvAppel(op, data) {
 // Un autre appareil a sauvegardé depuis notre dernière synchro : on ajoute ses jeux aux nôtres au lieu de les écraser
 // (un retrait fait ailleurs peut alors réapparaître : mieux que perdre un ajout).
 function fusionner(d) {
-  if (!d || !Array.isArray(d.listes)) return;
-  for (const x of d.listes) {
+  if (!d) return;
+  for (const x of Array.isArray(d.listes) ? d.listes : []) {
     if (!x || typeof x.nom !== 'string' || !Array.isArray(x.jeux)) continue;
     let l = listes.find(y => y.nom === x.nom);
     if (!l) { l = { nom: x.nom.slice(0, 40), jeux: [] }; listes.push(l); }
     for (const j of x.jeux) if (typeof j === 'string' && !l.jeux.some(k => memeJeu(k, j))) l.jeux.push(j);
   }
   try { localStorage.setItem(LISTES_CLE, JSON.stringify(listes)); } catch (e) { /* voir lireListes */ }
+  // Jeux suivis ailleurs et absents ici : ajoutés (avec leur prix max).
+  for (const x of nettoyerSuivis(d.suivis)) if (!suiviDe(x.titre) && suivis.length < MAX_SUIVIS) suivis.push(x);
+  try { localStorage.setItem(SUIVIS_CLE, JSON.stringify(suivis)); } catch (e) { /* voir lireListes */ }
 }
+const donneesSauvegarde = date => ({ listes, suivis, date });
 async function sauvegarder() {
   if (lsGet(SAUV_SYNC)) {
     const j = await sauvAppel('load');
     if (!j.vide && j.data && j.data.date > lsGet(SAUV_SYNC)) fusionner(j.data);
   }
   const date = new Date().toISOString();
-  await sauvAppel('save', { listes, date });
+  await sauvAppel('save', donneesSauvegarde(date));
   lsSet(SAUV_SYNC, date);
   return date;
 }
@@ -561,6 +658,10 @@ function restaurer(d) {
   if (!d || !Array.isArray(d.listes) || !d.listes.every(x => x && typeof x.nom === 'string' && Array.isArray(x.jeux))) throw new Error('sauvegarde illisible');
   listes.splice(0, listes.length, ...completerListes(d.listes.map(x => ({ nom: x.nom.slice(0, 40), jeux: x.jeux.filter(j => typeof j === 'string') }))));
   try { localStorage.setItem(LISTES_CLE, JSON.stringify(listes)); } catch (e) { /* voir lireListes */ }
+  if (Array.isArray(d.suivis)) { // sauvegarde ancienne (sans suivis) : on garde ceux de l'appareil
+    suivis.splice(0, suivis.length, ...nettoyerSuivis(d.suivis));
+    try { localStorage.setItem(SUIVIS_CLE, JSON.stringify(suivis)); } catch (e) { /* voir lireListes */ }
+  }
   lsSet(SAUV_SYNC, d.date || new Date().toISOString());
 }
 function planSauvegarde() {
@@ -635,7 +736,7 @@ const champListe = '<div class="nvlw"><input class="nvl" maxlength="40" placehol
 // « ＋ Liste » sous le titre du jeu : une pastille par liste (verte si le jeu y est), clic = ajouter / retirer.
 function listesMenu(d) {
   const t = titreJeu(d);
-  return `<div class="lrow"><details class="addl"><summary>＋ Liste</summary><div class="chips">${listes.map(l => `<button type="button" class="chip${dansListe(l.nom, t) ? ' on' : ''}" data-liste="${esc(l.nom)}">${esc(l.nom)}</button>`).join('')}</div>${champListe}</details>${neufHtml(d)}</div>`;
+  return `<div class="lrow"><details class="addl"><summary>＋ Liste</summary><div class="chips">${listes.map(l => `<button type="button" class="chip${dansListe(l.nom, t) ? ' on' : ''}" data-liste="${esc(l.nom)}">${esc(l.nom)}</button>`).join('')}</div>${champListe}</details>${suiviHtml(d)}${neufHtml(d)}</div>`;
 }
 // Écran « Mes listes » : jeux cliquables (ouverts comme un 🔍), ✕ pour retirer, 🛒 vers le matchmaking, suppression des listes créées.
 function listesHtml() {
@@ -726,6 +827,7 @@ function versPanier(jeux) {
   $('#pj').value = jeux.join('\n');
   $('.panier').scrollIntoView({ behavior: 'smooth' });
   $('#pj').focus();
+  majConseil();
 }
 
 function skeleton() {
@@ -874,6 +976,12 @@ $('#f').addEventListener('submit', e => {
   lancer($('#q').value.trim());
 });
 
+// Prix max d'un jeu suivi : enregistré dès que le champ est quitté.
+$('#out').addEventListener('change', e => {
+  const p = e.target.closest && e.target.closest('[data-pmax]');
+  if (p && affiche) majMax(titreJeu(affiche), p.value);
+});
+
 // Raccourci 🔍 à côté d'un jeu semblable : lance la recherche de ce jeu sans retaper son nom.
 $('#out').addEventListener('click', e => {
   const t = s => e.target.closest && e.target.closest(s);
@@ -881,6 +989,7 @@ $('#out').addEventListener('click', e => {
   if (b) { lancer(b.dataset.q, true); scrollTo(0, 0); return; }
   const li = t('[data-liste]');
   if (li && affiche) { basculer(li.dataset.liste, titreJeu(affiche)); majListeBoutons(li.dataset.liste); majVers(); return; }
+  if (t('[data-suivi]') && affiche) { basculerSuivi(titreJeu(affiche)); majSuiviPage(); return; }
   const nv = t('[data-nvl]');
   if (nv) {
     const nom = creerListe(nv.closest('.nvlw').querySelector('input').value);
@@ -1028,6 +1137,7 @@ function panierHtml(p) {
   // Jeux classés par nombre d'annonces, le plus d'annonces d'abord (à égalité : ordre de la liste) ; les introuvables en dernier.
   const jeux = (p.jeux || []).map((j, i) => ({ j, i })).sort((a, b) => (b.j.titre ? b.j.annonces || 0 : -1) - (a.j.titre ? a.j.annonces || 0 : -1) || a.i - b.i).map(({ j }) => j).map(j => (j.titre
     ? `<span class="chip">${extNouv(j.url, esc(j.titre))} · ${j.annonces} annonce${j.annonces > 1 ? 's' : ''}</span>`
+    : j.nonVerifie ? `<span class="chip th">${esc(j.demande)} : non vérifié</span>`
     : `<span class="chip th">${esc(j.demande)} : introuvable sur Okkazeo</span>`)).join('');
   const carte = v => `<div class="vend"><div class="top"><b>${esc(v.vendeur)}</b><button class="cp" data-copie="${esc(v.annonces.map(a => a.jeu).join(', '))}" title="Copier la liste des jeux">📋</button><span class="mut">${esc(v.ville ?? '')}${v.cp ? ` (${esc(v.cp)})` : ''}${v.nbAnnonces ? ` · ${v.nbAnnonces} annonce${v.nbAnnonces > 1 ? 's' : ''} en tout` : ''}</span>${v.procheParis ? '<span class="tag ok">près de Paris</span>' : ''}${v.envoi ? '<span class="tag">envoi</span>' : ''}<span class="right"><b>${v.nbJeux} jeux</b> · ${fr(v.total)} €</span></div>${v.annonces.map(a => `<div class="ann2"><span>${esc(a.jeu)} <span class="mut">${esc(a.etat ?? '')}</span></span><span>${fr(a.prix)} € ${a.url ? extNouv(a.url, 'annonce ↗') : ''}</span></div>`).join('')}</div>`;
   const vendeurs = (p.vendeurs || []).length
@@ -1035,12 +1145,14 @@ function panierHtml(p) {
     : '<p class="na">Aucun vendeur ne propose au moins 2 de ces jeux.</p>';
   // Encart « jeux sécurisés » : vendeurs qui ont TOUS les jeux à sécuriser, avec les autres jeux de la liste (même tri que les autres).
   const s = p.securises;
+  const panne = (p.erreurs || []).length || p.bloque;
   const securises = !s ? '' : `<h3 class="titre-l">🔒 Vendeurs qui ont tes jeux à sécuriser</h3>${
-    (s.introuvables || []).length ? `<p class="na">${(p.erreurs || []).length ? 'Okkazeo ne répond pas pour' : 'Introuvable sur Okkazeo :'} ${s.introuvables.map(esc).join(', ')}. ${(p.erreurs || []).length ? 'Réessaie plus tard.' : "Vérifie l'orthographe."}</p>`
+    (s.introuvables || []).length ? `<p class="na">${panne ? 'Okkazeo ne répond pas pour' : 'Introuvable sur Okkazeo :'} ${s.introuvables.map(esc).join(', ')}. ${panne ? 'Réessaie plus tard.' : "Vérifie l'orthographe."}</p>`
       : (s.vendeurs || []).length ? `<p class="mut">${(s.jeux || []).map(esc).join(' + ')}, avec le plus de jeux de ta liste</p>${s.vendeurs.map(carte).join('')}`
         : `<p class="na">Aucun vendeur n'a à la fois ${(s.jeux || []).map(esc).join(' et ')}.</p>`}`;
   const err = (p.erreurs || []).length ? `<p class="mut">Problème : ${esc(p.erreurs.join(' · '))}</p>` : '';
-  return `<div class="chips">${jeux}</div>${securises}${securises ? '<h3 class="titre-l">Autres vendeurs</h3>' : ''}${vendeurs}${err}`;
+  const bloque = p.bloque ? '<p class="na">Okkazeo bloque le serveur : réessaie plus tard ou utilise le favori Okkazeo (bouton « Okkazeo (favori) »).</p>' : '';
+  return `${bloque}<div class="chips">${jeux}</div>${securises}${securises ? '<h3 class="titre-l">Autres vendeurs</h3>' : ''}${vendeurs}${err}`;
 }
 
 $('#pr').addEventListener('click', e => {
@@ -1057,6 +1169,18 @@ $('#plbc').addEventListener('click', () => {
   if (jeux.length < 2) { $('#pr').innerHTML = '<p class="na">Mets au moins 2 jeux (un par ligne).</p>'; return; }
   window.open(lbcUrl(jeux), '_blank', 'noopener');
 });
+// Matchmaking Okkazeo depuis le navigateur (favori okk.js) : même principe, liste + jeux à sécuriser dans le hash.
+const okkUrl = (jeux, secu = []) => 'https://www.okkazeo.com/#nj=' + encodeURIComponent(jeux.slice(0, 300).join('|')) + (secu.length ? '&ns=' + encodeURIComponent(secu.slice(0, 3).join('|')) : '');
+// > 64 jeux : rythme lent côté serveur (1 requête/s, rythmePanier) → appels cumulés de 15 jeux (≤ ~65 s chacun) ; sinon 50.
+const planPanier = n => { const lent = n > 64, paquet = lent ? 15 : 50; return { lent, paquet, paliers: Math.ceil(n / paquet), estime: Math.ceil(n * (lent ? 3 : n > 15 ? 1.2 : 0.5)) }; };
+const conseilPanier = n => n > 64 ? `${n} jeux : au-delà de 64 jeux, utilise le favori Okkazeo (recherche depuis ton navigateur). Sinon le serveur passe en mode lent : environ ${Math.ceil(n * 3 / 60)} min.` : '';
+function majConseil() { const t = conseilPanier(jeuxSaisis().length), c = $('#pconseil'); c.textContent = t; c.hidden = !t; }
+$('#pj').addEventListener('input', majConseil);
+$('#pokk').addEventListener('click', () => {
+  const jeux = jeuxSaisis();
+  if (jeux.length < 2) { $('#pr').innerHTML = '<p class="na">Mets au moins 2 jeux (un par ligne).</p>'; return; }
+  window.open(okkUrl(jeux, secuSaisie()), '_blank', 'noopener');
+});
 
 $('#pf').addEventListener('submit', async e => {
   e.preventDefault();
@@ -1068,20 +1192,24 @@ $('#pf').addEventListener('submit', async e => {
   // quelle que soit la taille de la liste (même débit à 300 jeux, durée multipliée). Au-delà de 50, des appels par paquets de 50 (les 50 premiers, puis les 100…, jusqu'à la liste
   // entière) pour que chaque appel reste court ; chacun retrouve les jeux précédents dans la mémoire d'1 h du workflow et n'en recherche que la suite.
   const n = Math.min(jeux.length, 300), liste = jeux.slice(0, n), debut = Date.now();
-  const paliers = Math.ceil(n / 50);
-  let etape = n > 50 ? `étape 1/${paliers} : ` : '';
-  const estime = Math.ceil(n * (n > 15 ? 1.2 : 0.5));
-  const attente = () => { $('#pr').innerHTML = `<p class="mut">${etape}Recherche de ${n} jeux sur Okkazeo… ${Math.round((Date.now() - debut) / 1000)} s (jusqu'à ~${estime > 90 ? Math.ceil(estime / 60) + ' min' : estime + ' s'} ; les jeux déjà cherchés dans l'heure sont instantanés)</p><div class="skel"></div><div class="skel"></div>`; };
+  const { lent, paquet, paliers, estime } = planPanier(n);
+  let etape = paliers > 1 ? `étape 1/${paliers} : ` : '';
+  const attente = () => { $('#pr').innerHTML = `<p class="mut">${etape}Recherche de ${n} jeux sur Okkazeo… ${Math.round((Date.now() - debut) / 1000)} s (jusqu'à ~${estime > 90 ? Math.ceil(estime / 60) + ' min' : estime + ' s'} ; les jeux déjà cherchés dans l'heure sont instantanés).${lent ? ' Mode lent (plus de 64 jeux) : au-delà de 64 jeux, utilise plutôt le favori Okkazeo.' : ''}</p><div class="skel"></div><div class="skel"></div>`; };
   attente();
   const minuteur = setInterval(attente, 1000);
   const appel = async l => {
-    const r = await fetch(API_PANIER + '?jeux=' + encodeURIComponent(l.join('|')) + (secu.length ? '&secu=' + encodeURIComponent(secu.join('|')) : ''));
+    const r = await fetch(API_PANIER + '?jeux=' + encodeURIComponent(l.join('|')) + '&total=' + n + (secu.length ? '&secu=' + encodeURIComponent(secu.join('|')) : ''));
     if (!r.ok) throw new Error('HTTP ' + r.status);
     return r.json();
   };
   try {
-    for (let p = 1; p < paliers; p++) { await appel(liste.slice(0, p * 50)); etape = `étape ${p + 1}/${paliers} : `; }
-    $('#pr').innerHTML = panierHtml(await appel(liste));
+    let r;
+    for (let p = 1; p <= paliers; p++) {
+      r = await appel(liste.slice(0, p * paquet));
+      if (r.bloque) break; // coupe-circuit : Okkazeo bloque le serveur, on n'insiste pas
+      etape = `étape ${p + 1}/${paliers} : `;
+    }
+    $('#pr').innerHTML = panierHtml(r);
   } catch (err) {
     $('#pr').innerHTML = `<p class="na">Recherche impossible (${esc(err.message)}). Réessaie dans un instant.</p>`;
   } finally { clearInterval(minuteur); }

@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
-const { parseAnnoncesArticles, matchVendeurs, parseListeJeux, rythmePanier } = require('../lib/panier.js');
+const { parseAnnoncesArticles, matchVendeurs, parseListeJeux, rythmePanier, okkBloque } = require('../lib/panier.js');
 const fx = n => fs.readFileSync(`${__dirname}/fixtures/${n}`, 'utf8');
 const CPS = JSON.parse(fx('../../lib/cp-paris-10km.json')).cps;
 
@@ -63,9 +63,14 @@ test('vendeurs : la clé (Leboncoin : user_id) prime sur le pseudo ; sans clé, 
   assert.equal(matchVendeurs([{ titre: 'A', annonces: [ann('Zoe', 5)] }, { titre: 'B', annonces: [ann('zoe', 6)] }], CPS).length, 1);
 });
 
-test('rythme du matchmaking Okkazeo : même débit de 16 à 300 jeux (0,4 s, 2 jeux à la fois), normal jusqu\'à 15', () => {
+test("rythme du matchmaking Okkazeo : normal jusqu'à 15, 0,4 s et 2 jeux à la fois jusqu'à 64, au-delà 1 s et 1 jeu à la fois", () => {
   assert.deepEqual(rythmePanier(15), { pauseMs: 0, ouvriers: 3 });
-  for (const n of [16, 50, 51, 100, 300]) assert.deepEqual(rythmePanier(n), { pauseMs: 400, ouvriers: 2 }, String(n));
+  for (const n of [16, 50, 64]) assert.deepEqual(rythmePanier(n), { pauseMs: 400, ouvriers: 2 }, String(n));
+  for (const n of [65, 100, 300, Infinity]) assert.deepEqual(rythmePanier(n), { pauseMs: 1000, ouvriers: 1 }, String(n));
+});
+test('okkBloque : 403/429/503 ou page de challenge ; pas les pages normales (qui contiennent __CF et cloudflareinsights)', () => {
+  for (const [s, h] of [[403, ''], [429, ''], [503, ''], [200, '<title>Just a moment...</title>'], [200, 'window._cf_chl_opt={}']]) assert.equal(okkBloque(s, h), true, s + h);
+  for (const [s, h] of [[200, fx('okkazeo-search-clank.html')], [200, fx('okkazeo-clank.html')], [404, '']]) assert.equal(okkBloque(s, h), false, String(s));
 });
 
 test('jeux à sécuriser : seuls les vendeurs qui ont TOUS les jeux requis, classés par nombre de jeux de la liste', () => {

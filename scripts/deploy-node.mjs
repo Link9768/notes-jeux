@@ -9,6 +9,6 @@ const wf = await (await fetch(`${base}/api/v1/workflows/${id}`, { headers: h }))
 const node = wf.nodes.find(n => n.name === nodeName);
 if (!node) throw new Error('node introuvable');
 node.parameters.jsCode = execFileSync(process.execPath, [root + '/scripts/bundle.mjs', bundleName], { encoding: 'utf8' });
-const settings = { executionOrder: wf.settings?.executionOrder || 'v1' };
+const settings = { executionOrder: wf.settings?.executionOrder || 'v1', ...(wf.settings?.timezone ? { timezone: wf.settings.timezone } : {}) }; // timezone : le Schedule de la Veille (7 h Paris) en dépend
 const r = await fetch(`${base}/api/v1/workflows/${id}`, { method: 'PUT', headers: h, body: JSON.stringify({ name: wf.name, nodes: wf.nodes, connections: wf.connections, settings }) });
 console.log('PUT', r.status, r.ok ? '' : await r.text());

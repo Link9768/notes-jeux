@@ -1,52 +1,38 @@
 // Matchmaking Okkazeo : GET ?jeux=Clank|Abyss|… → vendeurs qui proposent au moins 2 de ces jeux (voir lib/panier.js).
 // secu = jeux « à sécuriser » (3 au plus, aussi cherchés comme les autres) : l'encart « sécurisés » ne garde que les vendeurs qui ont TOUS ces jeux.
-const secu = parseListeJeux($('Webhook').first().json.query.secu, 3);
-const noms = parseListeJeux(secu.concat(parseListeJeux($('Webhook').first().json.query.jeux)).join('|'));
+const q = $('Webhook').first().json.query;
+const secu = parseListeJeux(q.secu, 3);
+const noms = parseListeJeux(secu.concat(parseListeJeux(q.jeux)).join('|'));
 if (noms.length < 2) return [{ json: { jeux: noms.map(demande => ({ demande, titre: null, url: null, annonces: 0 })), vendeurs: [], erreurs: ['au moins 2 jeux'] } }];
 
-// Okkazeo refuse (403) le User-Agent seul : il faut les en-têtes d'un vrai navigateur (mêmes en-têtes que le node Sources).
-const BROWSER = {
-  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36',
-  'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-  'Accept-Language': 'fr-FR,fr;q=0.9',
-  'Sec-Fetch-Dest': 'document', 'Sec-Fetch-Mode': 'navigate', 'Sec-Fetch-Site': 'none', 'Sec-Fetch-User': '?1',
-  'Upgrade-Insecure-Requests': '1',
-  'sec-ch-ua': '"Chromium";v="130", "Google Chrome";v="130", "Not?A_Brand";v="99"',
-  'sec-ch-ua-mobile': '?0', 'sec-ch-ua-platform': '"Windows"',
-  'Accept-Encoding': 'gzip, deflate, br', 'Referer': 'https://www.google.com/',
-};
-// Deux vitesses (rythmePanier, lib/panier.js) : jusqu'à 15 jeux, rythme normal ; au-delà (300 au plus), 2 jeux à la fois et
-// 0,4 s entre deux requêtes Okkazeo (garde-fou anti-bannissement : même débit à 20 ou à 300 jeux).
-const { pauseMs: PAUSE_MS, ouvriers: OUVRIERS } = rythmePanier(noms.length);
+// total = taille de la liste ENTIÈRE (la page appelle par paquets cumulés) ; absent (ancienne page) → ce paquet.
+const total = Math.min(303, Math.max(noms.length, Number(q.total) || 0));
+const final = noms.length >= total;
+// Trois vitesses selon le total (rythmePanier, lib/panier.js) : ≤ 15 normal ; 16 à 64 : 2 jeux à la fois, 0,4 s entre deux requêtes ;
+// au-delà : 1 jeu à la fois, 1 s entre deux requêtes (garde-fous anti-bannissement).
+const { pauseMs: PAUSE_MS, ouvriers: OUVRIERS } = rythmePanier(total);
 let prochain = 0;
 const attendre = async () => {
   const t = Math.max(0, prochain - Date.now());
   prochain = Math.max(Date.now(), prochain) + PAUSE_MS;
   if (t) await new Promise(ok => setTimeout(ok, t));
 };
+// Coupe-circuit : au 1er blocage Okkazeo (403/429/503, challenge Cloudflare, page inattendue), plus aucune requête (avant ET après l'attente).
+const BLOQUE = 'Okkazeo bloque le serveur';
+let bloque = false;
 const get = async url => {
+  if (bloque) throw new Error(BLOQUE);
   await attendre();
-  const r = await this.helpers.httpRequest({ url, headers: BROWSER, json: false, timeout: 10000, returnFullResponse: true, ignoreHttpStatusErrors: true });
+  if (bloque) throw new Error(BLOQUE);
+  const r = await this.helpers.httpRequest({ url, headers: OKK_NAVIGATEUR, json: false, timeout: 10000, returnFullResponse: true, ignoreHttpStatusErrors: true });
+  const body = String(r.body ?? '');
+  if (okkBloque(r.statusCode, body)) { bloque = true; throw new Error(BLOQUE); }
   if (r.statusCode >= 400) throw new Error(`HTTP ${r.statusCode} ${url}`);
-  return String(r.body ?? '');
+  return body;
 };
 
-// Un jeu : recherche Okkazeo (titre exact), puis les annonces de ses éditions qui en ont (3 au plus, comme le node Sources).
-async function unJeu(nom) {
-  let recherche, cands = [], p = null;
-  for (const v of variantesRecherche(nom)) { // telle quelle, puis au singulier si rien ne correspond
-    recherche = 'https://www.okkazeo.com/jeux/resultats?rech_nom=' + encodeURIComponent(v);
-    const search = await get(recherche);
-    if (!/Nous avons trouvé|Aucun jeu ne correspond/.test(search)) throw new Error('page de recherche inattendue');
-    cands = parseOkkazeoSearch(search);
-    p = pickProduct(nom, cands);
-    if (p) break;
-  }
-  if (!p) return { demande: nom, titre: null, url: recherche, annonces: [] };
-  const editions = cands.filter(c => normalize(c.title) === normalize(p.title) && c.annonces !== 0).slice(0, 3);
-  const pages = await Promise.all(editions.map(e => get(e.url)));
-  return { demande: nom, titre: p.title, url: editions.length === 1 ? editions[0].url : recherche, annonces: pages.flatMap(parseAnnoncesArticles) };
-}
+// Un jeu : recherche Okkazeo puis annonces de ses éditions (annoncesOkkazeo, lib/panier.js, partagé avec le workflow Veille).
+const unJeu = nom => annoncesOkkazeo(nom, get);
 
 // Mémoire d'1 h dans le workflow (données statiques, gardées entre deux exécutions de production) :
 // un jeu déjà cherché dans l'heure ne coûte aucune requête. Absente hors production (tests) → objet vide.
@@ -69,7 +55,10 @@ let suivant = 0;
 await Promise.all(Array.from({ length: OUVRIERS }, async () => {
   while (suivant < noms.length) {
     const i = suivant++;
-    try { jeux[i] = await unJeuMemo(noms[i]); } catch (e) { jeux[i] = { demande: noms[i], titre: null, url: null, annonces: [], erreur: msg(e) }; }
+    try { jeux[i] = await unJeuMemo(noms[i]); } catch (e) {
+      if (msg(e) === BLOQUE || /inattendue/.test(msg(e))) bloque = true;
+      jeux[i] = bloque ? { demande: noms[i], titre: null, url: null, annonces: [], nonVerifie: true } : { demande: noms[i], titre: null, url: null, annonces: [], erreur: msg(e) };
+    }
   }
 }));
 const trouves = jeux.filter(j => j.titre);
@@ -88,9 +77,10 @@ const nbPour = url => nbParUrl.get(url) || nbParUrl.set(url, (async () => {
   memoire[k] = { t: Date.now(), v: nb };
   return nb;
 })()).get(url);
-await Promise.all(vendeurs.concat(securises).map(async v => {
+// Seulement à l'appel final et sans blocage : un appel intermédiaire n'a pas à coûter une requête par vendeur.
+if (final && !bloque) await Promise.all(vendeurs.concat(securises).map(async v => {
   const a = v.annonces.find(x => x.url);
   if (a) v.nbAnnonces = await nbPour(a.url);
 }));
 const erreurs = jeux.filter(j => j.erreur).map(j => `${j.demande}: ${j.erreur}`);
-return [{ json: { jeux: jeux.map(j => ({ demande: j.demande, titre: j.titre, url: j.url, annonces: j.annonces.length })), vendeurs, ...(secu.length ? { securises: { jeux: requis, introuvables, vendeurs: securises } } : {}), erreurs } }];
+return [{ json: { jeux: jeux.map(j => ({ demande: j.demande, titre: j.titre, url: j.url, annonces: j.annonces.length, ...(j.nonVerifie ? { nonVerifie: true } : {}) })), vendeurs, ...(secu.length ? { securises: { jeux: requis, introuvables, vendeurs: securises } } : {}), ...(bloque ? { bloque: true } : {}), erreurs } }];
