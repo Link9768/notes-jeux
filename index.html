@@ -904,7 +904,9 @@ if (document.addEventListener && typeof MutationObserver !== 'undefined') {
     if (!n) return;
     n.scrollLeft = ongletsScroll;
     const on = n.querySelector('.onglet-g.on');
-    if (on && (on.offsetLeft < n.scrollLeft || on.offsetLeft + on.offsetWidth > n.scrollLeft + n.clientWidth)) { n.scrollLeft = on.offsetLeft - 16; ongletsScroll = n.scrollLeft; }
+    if (!on) return;
+    const r = on.getBoundingClientRect(), b = n.getBoundingClientRect();
+    if (r.left < b.left || r.right > b.right) { n.scrollLeft += r.left - b.left - 16; ongletsScroll = n.scrollLeft; }
   }).observe($('#out'), { childList: true });
 }
 function ongletsHtml(min = 2) { // min = 1 dans Découvrir : le 1er jeu ouvert avec « ＋ » apparaît déjà
