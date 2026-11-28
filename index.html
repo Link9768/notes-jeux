@@ -130,6 +130,7 @@ button.chip:hover,button.chip.on{background:var(--bgg);color:#fff}
 .panier button{background:var(--okk)}
 .panier button#plbc{background:#ec5a13}
 .panier button#pokk{background:var(--okk)}
+.panier button#pdeux{background:linear-gradient(90deg,#ec5a13,var(--okk))}
 .panier .bts{display:flex;flex-direction:column;gap:8px}
 .panier details{padding:0 12px 12px;font-size:12px;color:var(--mut)}
 .panier #ps{width:100%;box-sizing:border-box;margin:6px 0}
@@ -153,7 +154,7 @@ button.chip:hover,button.chip.on{background:var(--bgg);color:#fff}
   <div id="out" aria-live="polite"></div>
   <section class="panier">
     <header><b>Matchmaking Okkazeo</b><span>vendeurs qui ont plusieurs jeux de ta liste</span></header>
-    <form id="pf"><textarea id="pj" rows="4" aria-label="Jeux recherchés, un par ligne" placeholder="Un jeu par ligne (2 à 300)&#10;7 Wonders Duel&#10;Carcassonne&#10;Azul"></textarea><input id="ps" maxlength="200" aria-label="Jeux à sécuriser, séparés par des virgules" placeholder="🔒 À sécuriser (2 à 3 jeux, séparés par des virgules) : vendeurs qui les ont tous"><div class="bts"><button>Chercher les vendeurs</button><button type="button" id="plbc">Leboncoin</button><button type="button" id="pokk">Okkazeo (favori)</button></div></form>
+    <form id="pf"><textarea id="pj" rows="4" aria-label="Jeux recherchés, un par ligne" placeholder="Un jeu par ligne (2 à 300)&#10;7 Wonders Duel&#10;Carcassonne&#10;Azul"></textarea><input id="ps" maxlength="200" aria-label="Jeux à sécuriser, séparés par des virgules" placeholder="🔒 À sécuriser (2 à 3 jeux, séparés par des virgules) : vendeurs qui les ont tous"><div class="bts"><button>Chercher les vendeurs</button><button type="button" id="plbc">Leboncoin</button><button type="button" id="pokk">Okkazeo (favori)</button><button type="button" id="pdeux" title="Ouvre Leboncoin et Okkazeo avec ta liste ; lance ensuite le favori sur chaque onglet">Les deux (favoris)</button></div></form>
     <p id="pconseil" class="mut" hidden></p>
     <details><summary>Installer le favori Matchmaking LBC</summary>
       <p><a href="javascript:(()=>{const s=document.createElement('script');s.src='https://link9768.github.io/notes-jeux/lbc.js?'+Date.now();document.body.appendChild(s)})()">Matchmaking LBC</a></p>
@@ -1224,6 +1225,15 @@ $('#pokk').addEventListener('click', () => {
   const jeux = jeuxSaisis();
   if (jeux.length < 2) { $('#pr').innerHTML = '<p class="na">Mets au moins 2 jeux (un par ligne).</p>'; return; }
   window.open(okkUrl(jeux, secuSaisie()), '_blank', 'noopener');
+});
+// Les deux d'un coup : 2 onglets (Chrome peut bloquer le 2e la 1re fois : autoriser les fenêtres pop-up pour ce site).
+// Les favoris ne peuvent pas être lancés par la page (sécurité du navigateur) : un clic sur chaque onglet.
+$('#pdeux').addEventListener('click', () => {
+  const jeux = jeuxSaisis();
+  if (jeux.length < 2) { $('#pr').innerHTML = '<p class="na">Mets au moins 2 jeux (un par ligne).</p>'; return; }
+  window.open(okkUrl(jeux, secuSaisie()), '_blank', 'noopener');
+  window.open(lbcUrl(jeux), '_blank', 'noopener');
+  $('#pr').innerHTML = '<p class="na">Deux onglets ouverts : sur chacun, clique sur son favori (Matchmaking LBC sur Leboncoin, Matchmaking Okkazeo sur Okkazeo). Un seul onglet ouvert ? Autorise les fenêtres pop-up pour ce site (icône à droite de la barre d’adresse), puis réessaie.</p>';
 });
 
 $('#pf').addEventListener('submit', async e => {
