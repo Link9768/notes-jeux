@@ -69,7 +69,9 @@ Case en bas de page : 2 à 100 jeux (un par ligne) → vendeurs Okkazeo qui en p
 
 Les résultats déjà chargés sont gardés 15 min en mémoire de la page (clé : recherche en minuscules) : re-cliquer sur un jeu déjà vu ne rappelle pas le webhook. 🔍 sur un jeu (semblables, même auteur) empile l'écran courant ; « ← Retour à … » le réaffiche sans réseau.
 
-Plusieurs jeux dans la barre (« Abyss, Clank, Azul », virgule ou point-virgule, 20 max ; une liste collée, un jeu par ligne, est convertie en virgules) : un onglet par jeu, chargés 6 à la fois (`charger` : un même jeu n'est demandé qu'une fois), puis navigation sans réseau. Étiquette = titre MyLudo une fois chargé, « … » pendant le chargement, « ⚠ » en cas d'échec (un clic relance).
+**Limite BGG (2026-11-28, vérifié sur l'historique n8n)** : l'API XML de BGG répond `Rate limit exceeded` au-delà d'environ 25 recherches en 15 s (≈ 50 appels) ; 17 jeux en 8 s passaient. Cas réel : une liste de 13–17 jeux chargée deux fois de suite (2e onglet, qui ne partageait pas la mémoire sessionStorage) → 7 à 10 jeux sans BGG. Depuis : `creneau` (une recherche au plus toutes les 1,2 s, toutes origines), 3 à la fois, mémoire 15 min en **localStorage** (partagée entre onglets), nodes BGG Candidats/Fiche → `sature`, Sources → `bggSature` : la page ne garde pas ce résultat et réessaie une fois 20 s plus tard. Mesuré : 15 jeux en 18 s, 0 refus ; 20 jeux ≈ 25 s.
+
+Plusieurs jeux dans la barre (« Abyss, Clank, Azul », virgule ou point-virgule, 20 max ; une liste collée, un jeu par ligne, est convertie en virgules) : un onglet par jeu, chargés 3 à la fois, une recherche toutes les 1,2 s (`charger` : un même jeu n'est demandé qu'une fois), puis navigation sans réseau. Étiquette = titre MyLudo une fois chargé, « … » pendant le chargement, « ⚠ » en cas d'échec (un clic relance).
 
 ## v2 (2026-10-31) — spec : `../docs/2026-10-31_notes-jeux-v2-design.md`
 
