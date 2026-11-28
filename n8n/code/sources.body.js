@@ -11,6 +11,7 @@ const liens = {
   myludo: 'https://www.myludo.fr/#!/search/' + enc,
 };
 const bgg = $('BGG Fiche').first().json.bgg;
+const bggSature = !!$('BGG Fiche').first().json.sature; // BGG a refusé (trop d'appels) : la page ne garde pas ce résultat
 if (!q) return [{ json: { query: q, espritjeu: null, philibert: null, bgg: null, okkazeo: null, myludo: null, liens, erreurs: ['q manquant'] } }];
 
 const UA = {
@@ -192,4 +193,5 @@ const val = r => (r.status === 'fulfilled' ? r.value : null);
 // Lien direct vers la page BoardGameGeek, lu dans la fiche Okkazeo (null si inconnu : la page propose alors la recherche BGG).
 const bggUrl = (val(ok) || {}).bggUrl || null;
 const erreurs = [ej, ph, ok, ml, sim].map((r, i) => r.status === 'rejected' ? `${['espritjeu', 'philibert', 'okkazeo', 'myludo', 'bgg-recs'][i]}: ${(r.reason && r.reason.message) || String(r.reason)}` : null).filter(Boolean);
-return [{ json: { query: q, espritjeu: val(ej), philibert: val(ph), ludifolie: val(lf), bgg, okkazeo: val(ok), myludo: val(ml), similaires: val(sim), editeurOk: !!((val(ml) || {}).editeurOk || (bgg && bgg.editeurOk)), duo: (val(du) || {}).duo || null, rejouabilite: (val(du) || {}).rejouabilite || null, bggUrl, liens, erreurs } }];
+if (bggSature) erreurs.push('bgg: saturé (trop d appels)');
+return [{ json: { query: q, bggSature, espritjeu: val(ej), philibert: val(ph), ludifolie: val(lf), bgg, okkazeo: val(ok), myludo: val(ml), similaires: val(sim), editeurOk: !!((val(ml) || {}).editeurOk || (bgg && bgg.editeurOk)), duo: (val(du) || {}).duo || null, rejouabilite: (val(du) || {}).rejouabilite || null, bggUrl, liens, erreurs } }];

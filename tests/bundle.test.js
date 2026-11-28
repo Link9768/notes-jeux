@@ -342,6 +342,22 @@ test('bgg-fiche : fiche si ids, sinon null', async () => {
   assert.deepEqual([abyss.out.bgg.mecaniques.length + abyss.out.bgg.themes.length, abyss.out.bgg.mecaniques[0].nom], [9, 'Enchères']);
   assert.deepEqual([abyss.out.bgg.rang, abyss.out.bgg.ideal, abyss.out.bgg.extensions], [453, '4', 7]);
 });
+test('BGG saturé (« Rate limit exceeded », réponse réelle du 2026-11-28) : signalé jusqu’à la sortie de Sources', async () => {
+  const rl = '<error>\n    <message>Rate limit exceeded.</message>\n</error>';
+  const c = await run('bgg-candidats', { nodes: { Webhook: { query: { q: 'stew' } } }, input: { data: rl } });
+  assert.deepEqual([c.out.ids, c.out.sature], ['', true]);
+  const f1 = await run('bgg-fiche', { nodes: { 'BGG Candidats': { ids: '', sature: true }, Webhook: { query: { q: 'stew' } } }, input: { data: '' } });
+  assert.deepEqual([f1.out.bgg, f1.out.sature], [null, true]);
+  const f2 = await run('bgg-fiche', { nodes: { 'BGG Candidats': { ids: '242324' }, Webhook: { query: { q: 'stew' } } }, input: { data: rl } });
+  assert.deepEqual([f2.out.bgg, f2.out.sature], [null, true]);
+  const ok = await run('bgg-fiche', { nodes: { 'BGG Candidats': { ids: '' }, Webhook: { query: { q: 'zzz' } } }, input: { data: '' } });
+  assert.equal(ok.out.sature, false);
+  const s = await run('sources', { nodes: { Webhook: { query: { q: 'clank' } }, 'BGG Fiche': { bgg: null, sature: true } }, http: serve() });
+  assert.equal(s.out.bggSature, true);
+  assert.ok(s.out.erreurs.some(e => e.startsWith('bgg: saturé')));
+  const n = await run('sources', { nodes: sourcesNodes(), http: serve() });
+  assert.equal(n.out.bggSature, false);
+});
 test('panier : 15 jeux ou moins → pas de pause entre les requêtes', async () => {
   const t = [];
   await run('panier', { nodes: panierNodes('clank|dixit: odyssey'), http: o => { t.push(Date.now()); return panierHttp(o); } });

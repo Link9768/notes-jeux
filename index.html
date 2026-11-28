@@ -289,7 +289,7 @@ function homonymesHtml(d) {
 // Grand encart BoardGameGeek : note, infos pratiques, style de jeu (mécaniques et catégories BGG traduites en français).
 function bggCard(d, games) {
   const b = d.bgg, pied = `<footer>${liens(d, games)}</footer>`;
-  if (!b) return `<section class="ml bgg"><header><b>BoardGameGeek</b><span>indisponible</span></header>${pied}</section>`;
+  if (!b) return `<section class="ml bgg"><header><b>BoardGameGeek</b><span>${d.bggSature ? 'BGG saturé : nouvel essai dans 20 s' : 'indisponible'}</span></header>${pied}</section>`;
   // Pastille « Extensions ✓ » (seulement s'il y en a) : un clic déplie la liste avec leurs notes.
   const extB = b.extensions > 0 ? `<button type="button" class="bga oui ext" data-ext="${esc(b.id)}" aria-expanded="false" title="${b.extensions} extension(s) : voir leurs notes">Extensions ✓</button>` : '';
   const note = b.note == null ? `<span class="na">pas encore d'avis</span>${extB}` : `<span class="big">${fr(b.note)}<small>/10</small></span> <span class="mut">${b.votes} votes</span>${extB}`;
@@ -844,8 +844,18 @@ const ENCOURS = new Map(); // chargements en cours : un même jeu n'est demandé
 const CHOIX = new Map();
 const ECHECS = new Set();
 const cleDe = q => q.trim().toLowerCase();
-// Retour depuis un lien externe (BGA, boutique…) : la page est rechargée, les résultats de la session sont repris.
-try { for (let k = 0; k < sessionStorage.length; k++) { const n = sessionStorage.key(k); if (n.startsWith('nj:c:')) { const c = JSON.parse(sessionStorage.getItem(n)); if (c && Date.now() - c.t < CACHE_MS) CACHE.set(n.slice(5), c); } } } catch (e) {}
+// Retour depuis un lien externe (BGA, boutique…) ou même liste ouverte dans un autre onglet : les résultats des 15 dernières
+// minutes sont repris (localStorage, partagé entre onglets : avant, un 2e onglet redemandait tout et BGG saturait).
+try { for (const n of Object.keys(localStorage)) { if (n.startsWith('nj:c:')) { const c = JSON.parse(localStorage.getItem(n)); if (c && Date.now() - c.t < CACHE_MS) CACHE.set(n.slice(5), c); else localStorage.removeItem(n); } } } catch (e) {}
+// BGG refuse au-delà d'environ 25 jeux en 15 s (« Rate limit exceeded », vu le 2026-11-28 ; 17 jeux en 8 s passaient) :
+// une recherche démarre au plus toutes les 1,2 s, quelle que soit sa provenance (liste, 🔍, onglet).
+const ESPACE_MS = typeof window !== 'undefined' ? 1200 : 0; // 0 dans les tests (pas de window)
+let prochainDepart = 0;
+const creneau = () => {
+  const t = Math.max(Date.now(), prochainDepart), attente = t - Date.now();
+  prochainDepart = t + ESPACE_MS;
+  return attente > 0 ? new Promise(r => setTimeout(r, attente)) : Promise.resolve();
+};
 const enCache = q => { const c = CACHE.get(cleDe(q)); return c && Date.now() - c.t < CACHE_MS ? c.d : null; };
 
 // Recherche serveur ; ch = choix de l'utilisateur ou éditeur tapé : { ml, an, ed }.
@@ -872,18 +882,27 @@ function charger(q) {
   if (ENCOURS.has(cle)) return ENCOURS.get(cle);
   ECHECS.delete(cle);
   const ch = CHOIX.get(cle);
-  const p = appelRecherche(q, ch)
+  const p = creneau().then(() => appelRecherche(q, ch))
     .then(async d => {
       // « Loop Yellow » : rien trouvé tel quel → nom + éditeur (le serveur confirme avec editeurOk que l'éditeur correspond à un jeu).
       if (!aTrouve(d) && !ch) d = (await parEditeurTape(q)) || d;
+      // BGG saturé : résultat affiché mais pas gardé, et redemandé une fois 20 s plus tard.
+      if (d && d.bggSature) { if (!RETENTES.has(cle)) { RETENTES.add(cle); setTimeout(() => retenter(q), 20000); } return d; }
+      RETENTES.delete(cle);
       CACHE.set(cle, { d, t: Date.now() });
-      try { sessionStorage.setItem('nj:c:' + cle, JSON.stringify(CACHE.get(cle))); } catch (e) {}
+      try { localStorage.setItem('nj:c:' + cle, JSON.stringify(CACHE.get(cle))); } catch (e) {}
       return d;
     })
     .catch(err => { ECHECS.add(cle); throw err; })
     .finally(() => ENCOURS.delete(cle));
   ENCOURS.set(cle, p);
   return p;
+}
+const RETENTES = new Set();
+// 2e essai après un BGG saturé : réaffiché si c'est le jeu à l'écran, sinon seule l'étiquette de l'onglet change.
+function retenter(q) {
+  if (!onglets.some(x => cleDe(x) === cleDe(q)) && !(courant && cleDe(courant.query || '') === cleDe(q))) return;
+  charger(q).then(() => { if (affiche && courant && cleDe(courant.query || '') === cleDe(q)) search(q); else majOnglets(); }, () => {});
 }
 
 // Recherche de plusieurs jeux (séparés par des virgules) : un onglet par jeu, tous chargés en parallèle,
@@ -986,10 +1005,10 @@ function lancer(q, garder) {
   if (!garder) $('#q').value = q;
   history.replaceState(null, '', '?q=' + encodeURIComponent(garder ? q : $('#q').value));
   if (onglets.length && !garder) {
-    // 6 chargements à la fois (20 jeux d'un coup = ~300 requêtes vers MyLudo et les boutiques).
+    // 3 chargements à la fois, un départ toutes les 1,2 s au plus (creneau) : 20 jeux ≈ 25 s, BGG ne sature plus.
     const file = onglets.slice();
     const suivant = () => { const x = file.shift(); if (x) charger(x).then(majOnglets, majOnglets).then(suivant); };
-    for (let k = 0; k < 6; k++) suivant();
+    for (let k = 0; k < 3; k++) suivant();
     search(onglets[0]);
   } else search(q);
 }

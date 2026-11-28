@@ -531,7 +531,7 @@ test('liste collée (un jeu par ligne, puces, numéros, tableur) → titres sép
   const f = vm.runInNewContext(`${script}; ({ listeCollee })`, { document: { querySelector: el }, location: { search: '' }, history: {}, fetch: async () => { throw new Error('x'); }, URLSearchParams });
   assert.equal(f.listeCollee('7 Wonders Duel\r\n- Abyss\n\n2. Skull King\tAzul\n'), '7 Wonders Duel, Abyss, Skull King, Azul');
 });
-test('jusqu’à 20 jeux dans la barre, chargés 6 à la fois', async () => {
+test('jusqu’à 20 jeux dans la barre, tous chargés', async () => {
   const appels = [];
   const els = {};
   const elx = sel => (els[sel] = els[sel] || { innerHTML: '', value: '', addEventListener() {} });
@@ -542,6 +542,35 @@ test('jusqu’à 20 jeux dans la barre, chargés 6 à la fois', async () => {
   await new Promise(r => setTimeout(r, 30));
   assert.equal(f.onglets().length, 20);
   assert.equal(appels.length, 20);
+});
+test('liste de jeux : 3 recherches à la fois, une toutes les 1,2 s au plus (BGG sature sinon)', async () => {
+  const appels = [], attentes = [];
+  const elx = (() => { const els = {}; return sel => (els[sel] = els[sel] || { innerHTML: '', value: '', addEventListener() {} }); })();
+  const ctx = { window: {}, document: { querySelector: elx }, location: { search: '' }, history: { replaceState() {} }, URLSearchParams,
+    setTimeout: (fn, ms) => { attentes.push(ms); return 1; },
+    fetch: async u => { const m = String(u).match(/notes-jeux\?q=(.*)$/); if (!m) return { ok: false }; appels.push(m[1]); return { ok: true, json: async () => ({ query: m[1], liens: { bgg: '#' } }) }; } };
+  const f = vm.runInNewContext(`${script}; ({ lancer })`, ctx);
+  f.lancer('a, b, c, d, e');
+  await new Promise(r => setTimeout(r, 20));
+  assert.equal(appels.length, 1); // les autres attendent leur créneau
+  const espaces = attentes.filter(ms => ms > 1000);
+  assert.equal(espaces.length, 3, String(attentes)); // départs différés à ≈ 1,2 s, 2,4 s, 3,6 s
+  assert.ok(espaces[0] >= 1150 && espaces[1] - espaces[0] >= 1150 && espaces[2] - espaces[1] >= 1150, String(espaces));
+});
+test('BGG saturé : résultat non gardé en mémoire, redemandé 20 s plus tard', async () => {
+  let n = 0; const timers = [];
+  const elx = (() => { const els = {}; return sel => (els[sel] = els[sel] || { innerHTML: '', value: '', addEventListener() {} }); })();
+  const ctx = { document: { querySelector: elx }, location: { search: '' }, history: { replaceState() {} }, URLSearchParams,
+    setTimeout: (fn, ms) => { timers.push([fn, ms]); return 1; },
+    fetch: async u => { if (!/notes-jeux\?q=/.test(String(u))) return { ok: false }; n++; return { ok: true, json: async () => ({ query: 'stew', bgg: null, bggSature: n === 1, liens: { bgg: '#' } }) }; } };
+  const f = vm.runInNewContext(`${script}; ({ charger, enCache })`, ctx);
+  const d = await f.charger('stew');
+  assert.equal(d.bggSature, true);
+  assert.equal(f.enCache('stew'), null);
+  assert.ok(timers.some(([, ms]) => ms === 20000));
+  await f.charger('stew');
+  assert.equal(n, 2);
+  assert.ok(f.enCache('stew'));
 });
 test('pastille Duo : « Duo ! » si intégrable, « Duo » sinon, clic = page du duo dans l’appli ; rien sans duo', () => {
   const f = vm.runInNewContext(`${script}; ({ duoBadge })`, { document: { querySelector: el }, location: { search: '' }, history: {}, fetch: async () => { throw new Error('x'); }, URLSearchParams });
