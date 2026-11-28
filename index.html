@@ -1230,8 +1230,8 @@ synchroniser().catch(() => {});
 if (document.addEventListener) document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') synchroniser().catch(() => {}); });
 const initial = new URLSearchParams(location.search).get('q');
 if (initial) {
+  const o = Number(new URLSearchParams(location.search).get('o')); // lu avant lancer, qui réécrit l'adresse
   lancer(initial.trim());
-  const o = Number(new URLSearchParams(location.search).get('o'));
   if (o > 0 && o < onglets.length) { actif = o; search(onglets[o]); }
 }
 </script>
