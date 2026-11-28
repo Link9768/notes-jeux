@@ -525,7 +525,7 @@ function majVers() {
   const v = $('#vers');
   const n = listes.filter(l => l.nom !== LUDO).reduce((s, l) => s + l.jeux.length, 0), nl = listes.find(l => l.nom === LUDO).jeux.length, nj = jeuxDesListes().length;
   if (v) v.innerHTML = `<button type="button" class="petit" id="versListes">📋 Mes listes${n ? ` (${n})` : ''}</button>${nj >= 2 ? `<button type="button" class="petit icone" id="versToutes" title="Envoyer les ${nj} jeux de toutes mes listes au matchmaking" aria-label="Envoyer les ${nj} jeux de toutes mes listes au matchmaking">🛒</button>` : ''}<button type="button" class="petit" id="versLudo">📚 Ma ludothèque${nl ? ` (${nl})` : ''}</button><button type="button" class="petit" id="versDec">🔥 Découvrir</button>`
-    + (onglets.length >= 2 ? `<button type="button" class="petit" id="versPanier">🛒 ${onglets.length} jeux → matchmaking</button>` : '');
+    + (onglets.length >= 2 ? `<button type="button" class="petit" id="versPanier">🛒 ${onglets.length} jeux → matchmaking</button><button type="button" class="petit icone" id="copieOnglets" title="Copier la liste des ${onglets.length} jeux" aria-label="Copier la liste des jeux">⧉</button>` : '');
 }
 
 // Mes listes : « À essayer », « À acheter », « À tester sur BGA » (fixes) + listes créées. Gardées dans le navigateur
@@ -844,6 +844,8 @@ const ENCOURS = new Map(); // chargements en cours : un même jeu n'est demandé
 const CHOIX = new Map();
 const ECHECS = new Set();
 const cleDe = q => q.trim().toLowerCase();
+// Retour depuis un lien externe (BGA, boutique…) : la page est rechargée, les résultats de la session sont repris.
+try { for (let k = 0; k < sessionStorage.length; k++) { const n = sessionStorage.key(k); if (n.startsWith('nj:c:')) { const c = JSON.parse(sessionStorage.getItem(n)); if (c && Date.now() - c.t < CACHE_MS) CACHE.set(n.slice(5), c); } } } catch (e) {}
 const enCache = q => { const c = CACHE.get(cleDe(q)); return c && Date.now() - c.t < CACHE_MS ? c.d : null; };
 
 // Recherche serveur ; ch = choix de l'utilisateur ou éditeur tapé : { ml, an, ed }.
@@ -875,6 +877,7 @@ function charger(q) {
       // « Loop Yellow » : rien trouvé tel quel → nom + éditeur (le serveur confirme avec editeurOk que l'éditeur correspond à un jeu).
       if (!aTrouve(d) && !ch) d = (await parEditeurTape(q)) || d;
       CACHE.set(cle, { d, t: Date.now() });
+      try { sessionStorage.setItem('nj:c:' + cle, JSON.stringify(CACHE.get(cle))); } catch (e) {}
       return d;
     })
     .catch(err => { ECHECS.add(cle); throw err; })
@@ -929,7 +932,12 @@ async function majOnglets() {
   else if (affiche) render(affiche, games);
 }
 
+// Adresse de la page = liste des onglets + onglet ouvert : un retour arrière (après BGA, une boutique…) retrouve la liste.
+function memoriserAdresse(q) {
+  history.replaceState(null, '', '?q=' + encodeURIComponent(onglets.length >= 2 ? onglets.join(', ') : q) + (onglets.length >= 2 && actif > 0 ? '&o=' + actif : ''));
+}
 async function search(q) {
+  memoriserAdresse(q);
   const my = ++seq;
   if (!enCache(q)) { affiche = null; $('#out').innerHTML = ongletsHtml() + skeleton(); }
   try {
@@ -1062,6 +1070,8 @@ $('#out').addEventListener('click', e => {
 $('#vers').addEventListener('click', e => {
   const t = s => e.target.closest && e.target.closest(s);
   if (t('#versPanier')) versPanier(titresOuverts());
+  const cpo = t('#copieOnglets');
+  if (cpo) { navigator.clipboard.writeText(onglets.join(', ')).then(() => { cpo.textContent = '✓'; setTimeout(() => { cpo.textContent = '⧉'; }, 1500); }, () => {}); return; }
   else if (t('#versToutes')) versPanier(jeuxDesListes());
   else if (t('#versListes')) { afficherListes(); scrollTo(0, 0); }
   else if (t('#versLudo')) { afficherListes('ludo'); scrollTo(0, 0); }
@@ -1219,7 +1229,11 @@ majVers();
 synchroniser().catch(() => {});
 if (document.addEventListener) document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') synchroniser().catch(() => {}); });
 const initial = new URLSearchParams(location.search).get('q');
-if (initial) lancer(initial.trim());
+if (initial) {
+  lancer(initial.trim());
+  const o = Number(new URLSearchParams(location.search).get('o'));
+  if (o > 0 && o < onglets.length) { actif = o; search(onglets[o]); }
+}
 </script>
 </body>
 </html>
