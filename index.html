@@ -894,6 +894,19 @@ let onglets = [];
 let actif = -1;
 let comparant = false; // onglet « ⚖ Comparer » affiché
 let affiche = null; // résultat affiché (null pendant un chargement)
+// La barre d'onglets est redessinée à chaque affichage : on garde sa position de défilement (sinon retour au 1er jeu),
+// et l'onglet ouvert est ramené dans la vue s'il en sort.
+let ongletsScroll = 0;
+if (document.addEventListener && typeof MutationObserver !== 'undefined') {
+  document.addEventListener('scroll', e => { if (e.target.classList && e.target.classList.contains('onglets')) ongletsScroll = e.target.scrollLeft; }, true);
+  new MutationObserver(() => {
+    const n = document.querySelector('#out nav.onglets');
+    if (!n) return;
+    n.scrollLeft = ongletsScroll;
+    const on = n.querySelector('.onglet-g.on');
+    if (on && (on.offsetLeft < n.scrollLeft || on.offsetLeft + on.offsetWidth > n.scrollLeft + n.clientWidth)) { n.scrollLeft = on.offsetLeft - 16; ongletsScroll = n.scrollLeft; }
+  }).observe($('#out'), { childList: true });
+}
 function ongletsHtml(min = 2) { // min = 1 dans Découvrir : le 1er jeu ouvert avec « ＋ » apparaît déjà
   if (onglets.length < min) return '';
   const charges = onglets.filter(q => enCache(q)).length;
